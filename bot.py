@@ -731,14 +731,14 @@ class SimpleCache:
         self.timestamps.clear()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "PASTE_YOUR_BOT_TOKEN_HERE")   # ← BOT TOKEN YAHAN DALO
-ADMIN_ID = 8994408644
-OWNER_USERNAME = "@flirts_x"
+ADMIN_ID = int(os.getenv("ADMIN_ID", "8994408644"))
+OWNER_USERNAME = os.getenv("OWNER_USERNAME", "@flirts_x")
 
 # ── Channel Broadcast Feature ──────────────────────────────────
 # Set this to your channel's chat_id (negative number, e.g. -1001234567890)
 # Bot must be admin in that channel.
 # Any post sent to the channel will auto-broadcast as a forward to all users + groups.
-BROADCAST_CHANNEL_ID = None   # <-- fill this in, e.g. -1001234567890
+BROADCAST_CHANNEL_ID = int(os.getenv("BROADCAST_CHANNEL_ID")) if os.getenv("BROADCAST_CHANNEL_ID", "").strip() else None   # <-- fill this in, e.g. -1001234567890
 
 API_BASE_URL = os.getenv("API_BASE_URL", "PASTE_YOUR_MAIN_API_BASE_URL")   # ← MAIN API BASE URL
 API_KEY = os.getenv("API_KEY", "PASTE_YOUR_API_KEY")   # ← API KEY
