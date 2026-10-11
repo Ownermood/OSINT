@@ -6269,6 +6269,57 @@ def insta_cmd(message):
         send_random_media(chat_id, sent_msg.message_id)
 
 
+ADMIN_MENUS = {
+    "users": ("👥 Users", [
+        ("👥 User Stats", "admin_users"), ("🔍 Search User", "admin_ask_searchuser"),
+        ("🚫 Block User", "admin_block"), ("✅ Unblock User", "admin_unblock"),
+        ("👑 Make Admin", "admin_makeadmin"), ("🗑 Remove Admin", "admin_removeadmin"),
+    ]),
+    "credits": ("💰 Credits & Codes", [
+        ("➕ Add Credits", "admin_addcredits"), ("➖ Remove Credits", "admin_removecredits"),
+        ("🎟 Gen Code", "admin_ask_gen"), ("📜 All Codes", "admin_run_allcodes"),
+        ("❌ Delete Code", "admin_ask_deletecode"),
+    ]),
+    "broadcast": ("📢 Broadcast", [
+        ("📢 Broadcast", "admin_broadcast_info"), ("📢 Broadcast Btn", "admin_ask_broadcastbtn"),
+        ("📡 Set BC Channel", "admin_setbc_info"), ("📡 Remove BC", "admin_run_removebc"),
+    ]),
+    "channels": ("📡 Channels", [
+        ("➕ Add Channel", "admin_ask_addc"), ("➖ Remove Channel", "admin_ask_removec"),
+        ("📋 List Channels", "admin_run_listc"),
+        ("🔒 Lock Force Join", "admin_run_lockf"), ("🔓 Unlock Force Join", "admin_run_unlockf"),
+    ]),
+    "api": ("🔗 API", [
+        ("🔗 List APIs", "admin_run_api"), ("✏️ Change API", "admin_ask_apic"),
+        ("🔧 API Status", "admin_ask_apistatus"),
+    ]),
+    "media": ("🖼 Media", [
+        ("🎬 Add Video", "admin_run_addvideo"), ("🖼 Add Photo", "admin_run_addphoto"),
+        ("✅ Done Media", "admin_run_done"), ("⚙️ Set Mode", "admin_ask_setmode"),
+        ("🎞 List Videos", "admin_run_listvideos"), ("🖼 List Photos", "admin_run_listphotos"),
+        ("🗑 Delete Video", "admin_run_delvideo"), ("🗑 Delete Photo", "admin_run_delphoto"),
+    ]),
+    "bot": ("⚙️ Bot Control", [
+        ("📊 Stats", "admin_stats"), ("📈 Command Stats", "admin_run_commands"),
+        ("⏱ Uptime", "admin_run_uptime"),
+        ("🔒 Lock Bot", "admin_run_lock"), ("🔓 Unlock Bot", "admin_run_unlock"),
+    ]),
+}
+
+
+def admin_menu_markup(cat=None):
+    markup = InlineKeyboardMarkup(row_width=2)
+    if cat is None:
+        items = [(title, f"admin_cat_{k}") for k, (title, _) in ADMIN_MENUS.items()]
+    else:
+        items = ADMIN_MENUS[cat][1]
+    btns = [create_success_button(t, callback_data=d) for t, d in items]
+    markup.add(*btns)
+    if cat is not None:
+        markup.add(create_default_button("🔙 Back", callback_data="admin_cat_main"))
+    return markup
+
+
 def admin_panel(message):
     """Full admin panel with stats + all admin action buttons."""
     chat_id = message.chat.id
@@ -6288,85 +6339,7 @@ def admin_panel(message):
         "</blockquote>"
     )
 
-    markup = InlineKeyboardMarkup(row_width=2)
-    markup.add(
-        create_primary_button("📊 Stats",        callback_data="admin_stats",         icon_custom_emoji_id="5992344826715050001"),
-        create_primary_button("👥 Users",         callback_data="admin_users",         icon_custom_emoji_id="5424746868275944727"),
-    )
-    markup.add(
-        create_success_button("➕ Add Credits",   callback_data="admin_addcredits",   icon_custom_emoji_id="6048770006810893912"),
-        create_danger_button( "➖ Remove Credits", callback_data="admin_removecredits", icon_custom_emoji_id="5370596264205366968"),
-    )
-    markup.add(
-        create_success_button("✅ Unblock User",  callback_data="admin_unblock",      icon_custom_emoji_id="5339247212012528642"),
-        create_danger_button( "🚫 Block User",    callback_data="admin_block",         icon_custom_emoji_id="5372880070115341091"),
-    )
-    markup.add(
-        create_success_button("👑 Make Admin",    callback_data="admin_makeadmin",    icon_custom_emoji_id="6219727185708582935"),
-        create_danger_button( "🗑 Remove Admin",  callback_data="admin_removeadmin",  icon_custom_emoji_id="5370635893868606590"),
-    )
-    markup.add(
-        create_primary_button("📢 Broadcast",     callback_data="admin_broadcast_info", icon_custom_emoji_id="5233279094531045380"),
-        create_primary_button("📡 Set BC Channel",callback_data="admin_setbc_info",  icon_custom_emoji_id="5246931953751443616"),
-    )
-    markup.add(
-        create_primary_button("🔧 API Status",    callback_data="admin_api_status",  icon_custom_emoji_id="5465637267626271756"),
-        create_primary_button("🖼 Add Media",     callback_data="admin_addmedia",    icon_custom_emoji_id="5008416661569536895"),
-    )
-    markup.add(
-        create_primary_button("🎟 Gen Code",      callback_data="admin_ask_gen"),
-        create_primary_button("📜 All Codes",     callback_data="admin_run_allcodes"),
-    )
-    markup.add(
-        create_danger_button( "❌ Delete Code",   callback_data="admin_ask_deletecode"),
-        create_primary_button("🔍 Search User",   callback_data="admin_ask_searchuser"),
-    )
-    markup.add(
-        create_danger_button( "🔒 Lock Bot",      callback_data="admin_run_lock"),
-        create_success_button("🔓 Unlock Bot",    callback_data="admin_run_unlock"),
-    )
-    markup.add(
-        create_primary_button("📢 Broadcast Btn", callback_data="admin_ask_broadcastbtn"),
-        create_danger_button( "📡 Remove BC",     callback_data="admin_run_removebc"),
-    )
-    markup.add(
-        create_success_button("➕ Add Channel",   callback_data="admin_ask_addc"),
-        create_danger_button( "➖ Remove Channel",callback_data="admin_ask_removec"),
-    )
-    markup.add(
-        create_primary_button("📋 List Channels", callback_data="admin_run_listc"),
-        create_primary_button("🔗 List APIs",     callback_data="admin_run_api"),
-    )
-    markup.add(
-        create_primary_button("✏️ Change API",    callback_data="admin_ask_apic"),
-        create_primary_button("⚙️ Set Mode",      callback_data="admin_ask_setmode"),
-    )
-    markup.add(
-        create_danger_button( "🔒 Lock Force Join",  callback_data="admin_run_lockf"),
-        create_success_button("🔓 Unlock Force Join",callback_data="admin_run_unlockf"),
-    )
-    markup.add(
-        create_primary_button("🎬 Add Video",     callback_data="admin_run_addvideo"),
-        create_primary_button("🖼 Add Photo",     callback_data="admin_run_addphoto"),
-    )
-    markup.add(
-        create_success_button("✅ Done Media",    callback_data="admin_run_done"),
-        create_primary_button("⏱ Uptime",        callback_data="admin_run_uptime"),
-    )
-    markup.add(
-        create_primary_button("🎞 List Videos",   callback_data="admin_run_listvideos"),
-        create_primary_button("🖼 List Photos",   callback_data="admin_run_listphotos"),
-    )
-    markup.add(
-        create_danger_button( "🗑 Delete Video",  callback_data="admin_run_delvideo"),
-        create_danger_button( "🗑 Delete Photo",  callback_data="admin_run_delphoto"),
-    )
-    markup.add(
-        create_primary_button("📈 Command Stats", callback_data="admin_run_commands"),
-    )
-    markup.add(
-        create_danger_button("🔄 Reload Bot",     callback_data="admin_reload",       icon_custom_emoji_id="5370754155793102519"),
-    )
+    markup = admin_menu_markup()
 
     send_with_premium(chat_id, text, reply_markup=markup)
 
@@ -7767,7 +7740,18 @@ def callback_handler(call):
             bot.register_next_step_handler(prompt, _on_reply)
             return
 
+        if call.data.startswith("admin_cat_"):
+            cat = call.data[10:]
+            bot.answer_callback_query(call.id)
+            try:
+                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id,
+                                              reply_markup=admin_menu_markup(None if cat == "main" else cat))
+            except Exception:
+                pass
+            return
+
         _cmd_fn = {
+            "apistatus": (apistatus_cmd, "command status message"),
             "gen": (gen_code_cmd, "credits max_uses days (e.g. 50 10 30)"),
             "allcodes": (all_codes_cmd, None), "deletecode": (delete_code_cmd, "code"),
             "searchuser": (search_user_cmd, "user_id or username"),
