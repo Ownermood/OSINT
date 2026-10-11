@@ -5687,6 +5687,9 @@ def start_cmd(message):
 
     username   = message.from_user.username or "N/A"
     first_name = message.from_user.first_name or "User"
+    import html as _hn
+    # clickable name (opens the user's profile) — like an inline mention
+    name_link = f'<a href="tg://user?id={user_id}">{_hn.escape(first_name)}</a>'
 
     # ── STEP 1: Force-join check (channels must be joined first) ──
     if not enforce_force_join(message):
@@ -5759,7 +5762,7 @@ def start_cmd(message):
         f"{STARS}"
         f"{DIV}"
         f"\n"
-        f"{_s(SMILEY,'😀')} <b>Hᴇʏ !! {first_name}</b>\n"
+        f"{_s(SMILEY,'😀')} <b>Hᴇʏ !! {name_link}</b>\n"
         f"{_s(IDICO,'🆔')} <b>ID</b>: <code>{user_id}</code>\n"
         f"{_s(BADGE,'⚜️')} <b>Cʀᴇᴅɪᴛꜱ</b>: <b>{credits_display(user_id)}</b>\n"
         f"{_s(STAR1,'🌟')} <b>Fʀᴇᴇ Tᴏᴅᴀʏ</b>: <b>{free_display(user_id)}</b>\n\n"
@@ -5797,7 +5800,7 @@ def start_cmd(message):
 
     _custom = get_setting("welcome_text")
     if _custom:
-        msg = (_custom.replace("{name}", first_name).replace("{id}", str(user_id))
+        msg = (_custom.replace("{name}", name_link).replace("{id}", str(user_id))
                       .replace("{credits}", str(credits))
                       .replace("{free}", str(free_left(user_id, message.chat.type in ("group", "supergroup")))))
 
