@@ -9707,6 +9707,8 @@ def _sc_wrap(method, fields):
 
     def wrapper(*args, **kw):
         args = list(args)
+        if kw.get("reply_to_message_id") and "allow_sending_without_reply" in params:
+            kw.setdefault("allow_sending_without_reply", True)   # the command may already be deleted
         is_result = False
         for f in ("text", "caption"):
             v = kw.get(f) if f in kw else (args[params.index(f)] if f in params and params.index(f) < len(args) else None)
@@ -9919,12 +9921,19 @@ if __name__ == "__main__":
     threading.Thread(target=_autodelete_loop, daemon=True).start()
 
     def _group_cmd_cleaner(messages):
+        """Group: the user's /command disappears right away, the bot's answer stays for 1 min."""
         for m in messages:
             try:
                 if m.chat.type in ("group", "supergroup") and (m.text or "").startswith("/"):
-                    _queue_delete(m.chat.id, m.message_id, GROUP_DELETE_TIME)
+                    threading.Timer(1.0, lambda c=m.chat.id, i=m.message_id: _safe_delete(c, i)).start()
             except Exception:
                 pass
+
+    def _safe_delete(c, i):
+        try:
+            bot.delete_message(c, i)
+        except Exception:
+            _queue_delete(c, i, 30)   # retry later (e.g. bot had no delete right yet)
 
     bot.set_update_listener(_group_cmd_cleaner)
 
