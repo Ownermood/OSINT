@@ -1989,77 +1989,8 @@ def rename_channel_cmd(message):
 
 
 def _enforce_verify_gate(message):
-    """
-    Central verify gate — called by enforce_force_join before any command runs.
-    Returns True  → user is verified (or admin), command may proceed.
-    Returns False → gate shown, command must stop.
-
-    GC  : shows inline "Verify in Private" button (60 s auto-delete).
-    PVT : shows contact-share button via send_contact_verification_prompt().
-    Admin/owner skip always.
-    """
-    return True  # contact verification disabled — only force join is required
-    uid     = message.from_user.id
-    chat_id = message.chat.id
-
-    # Admin / owner — always pass
-    if is_admin(uid):
-        return True
-
-    # Already verified — pass
-    if _is_contact_verified(uid):
-        return True
-
-    # ── GROUP / SUPERGROUP ───────────────────────────────────────────
-    if message.chat.type in ("group", "supergroup"):
-        try:
-            bot_me = bot.get_me()
-            bot_uname = bot_me.username
-        except Exception:
-            bot_uname = None
-
-        if bot_uname:
-            deep_link = f"https://t.me/{bot_uname}?start=verify"
-            markup = types.InlineKeyboardMarkup()
-            btn = types.InlineKeyboardButton(
-                text="📱 ᴠᴇʀɪꜰʏ ɪɴ ᴘʀɪᴠᴀᴛᴇ",
-                url=deep_link,
-            )
-            try:
-                btn.style = "success"
-            except Exception:
-                pass
-            markup.add(btn)
-
-            grp_text = (
-                "<blockquote>"
-                f"{_cv_pe('robot', '🤖')} <b>ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ ʀᴇQᴜɪʀᴇᴅ</b>\n\n"
-                f"{_cv_pe('shield', '🛡️')} Bot use karne ke liye pehle "
-                "<b>private chat mein verify</b> karo.\n\n"
-                f"{_cv_pe('phone', '📱')} Neeche button dabao aur apna contact share karo."
-                "</blockquote>"
-            )
-            try:
-                sent = send_with_premium(chat_id, grp_text, reply_markup=markup)
-                if sent:
-                    def _del_grp(cid=chat_id, mid=sent.message_id):
-                        import time as _t; _t.sleep(60)
-                        try: bot.delete_message(cid, mid)
-                        except Exception: pass
-                    threading.Thread(target=_del_grp, daemon=True).start()
-            except Exception as exc:
-                print(f"[VERIFY_GATE_GC] {exc}")
-        return False   # block command
-
-    # ── PRIVATE CHAT ─────────────────────────────────────────────────
-    # Save what command they tried so we can resume after verify
-    try:
-        _PENDING_REF[uid] = getattr(message, "text", "/start")
-    except Exception:
-        pass
-    send_contact_verification_prompt(uid)
-    return False   # block command
-
+    """Contact verification is disabled — only force join is required."""
+    return True
 
 def enforce_force_join(message):
     user_id = message.from_user.id
@@ -5540,126 +5471,6 @@ def _cv_prompt_text():
     )
 
 
-def send_contact_verification_prompt(uid, ref=None):
-    """Show the verification prompt and track message_id for cleanup."""
-    if ref:
-        _save_pending_ref(uid, ref)
-
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    keyboard.add(
-        _KB(
-            "📱 ᴛᴀᴘ ᴛᴏ ꜱʜᴀʀᴇ ᴄᴏɴᴛᴀᴄᴛ",
-            style="success",
-            icon_custom_emoji_id=CAPTCHA_EMOJI["phone"],
-            request_contact=True,
-        )
-    )
-    try:
-        sent = send_with_premium(uid, _cv_prompt_text(), reply_markup=keyboard)
-        if sent and getattr(sent, "message_id", None):
-            _LAST_CAPCHA_MESSAGE[uid] = sent.message_id
-        return sent
-    except Exception as exc:
-        print(f"[CV_PROMPT] {exc}")
-        return None
-
-
-@bot.message_handler(content_types=["contact"])
-def h_contact_verify(msg):
-    """Accept user's own Telegram contact — verify and clean old gate cards."""
-    try:
-        if msg.chat.type != "private" or not msg.contact:
-            return
-
-        uid = msg.from_user.id
-        contact_uid = getattr(msg.contact, "user_id", None)
-
-        # Reject forwarded / someone-else's contact
-        if contact_uid and contact_uid != uid:
-            bot.reply_to(
-                msg,
-                (
-                    "<blockquote>"
-                    f"{_cv_pe('cross', '❌')} <b>Invalid contact</b>\n"
-                    "Please apna khud ka Telegram contact share karo."
-                    "</blockquote>"
-                ),
-                parse_mode="HTML",
-            )
-            return
-
-        phone = (getattr(msg.contact, "phone_number", None) or "").strip()
-        if not phone:
-            bot.reply_to(
-                msg,
-                (
-                    "<blockquote>"
-                    f"{_cv_pe('warning', '⚠️')} Contact number nahi mila. "
-                    "Dobara button tap karke share karo."
-                    "</blockquote>"
-                ),
-                parse_mode="HTML",
-            )
-            return
-
-        # Persist verification — single clean save, upsert=True inside
-        try:
-            _mark_contact_verified(uid, phone)
-        except Exception as exc:
-            print(f"[CV_SAVE] {exc}")
-
-        # Remove reply keyboard silently
-        try:
-            clr = bot.send_message(
-                uid, "\u2060",
-                reply_markup=types.ReplyKeyboardRemove(),
-            )
-            _cv_delete(uid, getattr(clr, "message_id", None))
-        except Exception as exc:
-            print(f"[CV_KB_REMOVE] {exc}")
-
-        # Restore pending command or referral
-        pending = _PENDING_REF.pop(uid, None)
-        if isinstance(pending, int):
-            # It was a referral id saved by start_cmd gate
-            msg.text = f"/start ref_{pending}"
-            try:
-                start_cmd(msg)
-            except Exception as exc:
-                print(f"[CV_RESTART_START] {exc}")
-        elif isinstance(pending, str) and pending.startswith("/") and not pending.startswith("/start"):
-            # It was a real command they tried — re-dispatch it
-            msg.text = pending
-            try:
-                bot.process_new_messages([msg])
-            except Exception as exc:
-                print(f"[CV_RESTART_CMD] {exc}")
-                # Fallback: just open start
-                msg.text = "/start"
-                try: start_cmd(msg)
-                except Exception: pass
-        else:
-            # Default: open start
-            msg.text = "/start"
-            try:
-                start_cmd(msg)
-            except Exception as exc:
-                print(f"[CV_RESTART] {exc}")
-
-        # Cleanup old gate messages
-        cleanup_ids = []
-        old_fj  = _LAST_FJ_MESSAGE.pop(uid, None)
-        old_cap = _LAST_CAPCHA_MESSAGE.pop(uid, None)
-        if old_fj:
-            cleanup_ids.append(old_fj)
-        if old_cap:
-            cleanup_ids.append(old_cap)
-        cleanup_ids.append(getattr(msg, "message_id", None))
-        _cv_delete_many(uid, cleanup_ids)
-
-    except Exception as exc:
-        print(f"[CONTACT_VERIFY] {exc}")
-
 def get_start_pic():
     return get_setting("start_pic", "")
 
@@ -5696,13 +5507,6 @@ def start_cmd(message):
         return
 
     # ── STEP 2: Captcha gate — skip for admins / bot owner ───────
-    if False:  # contact verification disabled
-        # Save referral so it survives the contact gate redirect
-        ref_val = extract_referral(message.text)
-        _save_pending_ref(user_id, ref_val)
-        send_contact_verification_prompt(user_id)
-        return   # stop here — h_contact_verify will call start_cmd after verify
-
     # ── STEP 3: Already verified → proceed to normal welcome ──────
 
     referred = extract_referral(message.text)
@@ -9301,7 +9105,7 @@ def callback_handler(call):
     except Exception as e:
         print(f"❌ Callback error: {e}")
 
-@bot.message_handler(func=lambda m: True)
+@bot.message_handler(func=lambda m: not (m.text or "").startswith("/"))
 def track_all_messages(m):
     if m.chat.type in ['group', 'supergroup']:
         chat_id = m.chat.id
