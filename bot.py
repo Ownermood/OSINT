@@ -545,8 +545,8 @@ def replace_with_premium_emojis(text):
 
     import re
 
-    # Step 1: Protect existing <tg-emoji> tags
-    tg_emoji_pattern = re.compile(r'<tg-emoji emoji-id=["\'"]\d+["\'"]>[^<]*</tg-emoji>')
+    # Step 1: Protect existing <tg-emoji> tags and <pre> blocks (no custom emoji allowed there)
+    tg_emoji_pattern = re.compile(r'<tg-emoji emoji-id=["\'"]\d+["\'"]>[^<]*</tg-emoji>|<pre>.*?</pre>', re.S)
     placeholders = []
     def protect(match):
         placeholders.append(match.group(0))
@@ -3359,16 +3359,17 @@ def format_number_result(result, query, credits_left):
             def _field(val):
                 return val if val and str(val).strip() not in ("N/A", "None", "null", "") else "—"
 
-            txt += f"<blockquote>{te(e['number'],  '📲')} <b>Nᴜᴍʙᴇʀ</b>    : <code>{_field(record.get('mobile'))}</code>\n"
-            txt += f"{te(e['name'],    '👤')} <b>Nᴀᴍᴇ</b>      : {_field(record.get('name'))}\n"
-            _tc = _field(record.get('truecaller_name'))
-            if _tc != "—": txt += f"{te(e['name'], '📛')} <b>TC Nᴀᴍᴇ</b>   : {_tc}\n"
-            txt += f"{te(e['father'],  '👥')} <b>Fᴀᴛʜᴇʀ</b>    : {_field(record.get('father_name'))}\n"
-            txt += f"{te(e['alt_num'], '📞')} <b>Aʟᴛ Nᴜᴍ</b>   : <code>{_field(record.get('alternate'))}</code>\n"
-            txt += f"{te(e['circle'],  '🔎')} <b>Cɪʀᴄʟᴇ</b>    : {_field(record.get('circle'))}\n"
-            txt += f"{te(e['address'], '🏡')} <b>Aᴅᴅʀᴇꜱꜱ</b>  : {_field(record.get('address'))}\n"
-            txt += f"{te(e['id_card'], '💳')} <b>Iᴅ</b>        : <code>{_field(record.get('id'))}</code>\n"
-            txt += f"{te(e['email'],   '📧')} <b>Eᴍᴀɪʟ</b>     : {_field(record.get('email'))}</blockquote>\n"
+            import html as _hh
+            def _v(k):
+                # only < > escaped here; send_with_premium already escapes "&"
+                return _hh.unescape(_hh.unescape(str(_field(record.get(k))))).replace("<", "&lt;").replace(">", "&gt;")
+            rec = [f"📲 Number   : {_v('mobile')}", f"👤 Name     : {_v('name')}"]
+            if _field(record.get('truecaller_name')) != "—":
+                rec.append(f"📛 TC Name  : {_v('truecaller_name')}")
+            rec += [f"👥 Father   : {_v('father_name')}", f"📞 Alt Num  : {_v('alternate')}",
+                    f"🔎 Circle   : {_v('circle')}", f"🏡 Address  : {_v('address')}",
+                    f"💳 ID       : {_v('id')}", f"📧 Email    : {_v('email')}"]
+            txt += "<pre>" + "\n".join(rec) + "</pre>\n"
 
         elapsed = round(_time.time() - start_ts, 2)
         bot_username = "@YourBot"
@@ -3388,7 +3389,7 @@ def format_number_result(result, query, credits_left):
             f"{te(e['star'], '🌟')}\n"
         )
         txt += divider
-        txt += f"⏳ <i>Tap any value to copy · save it, auto-deletes in 1 min</i>\n"
+        txt += f"⏳ <i>Record box pe Copy dabao — poora record copy · auto-deletes in 1 min</i>\n"
 
         markup = None
         if total_pages > 1:
@@ -9348,7 +9349,8 @@ def _copyable_values(t):
         import html as _h
         val = _h.escape(_h.unescape(_h.unescape(val)), quote=False)
         return f"{m.group(1)}<code>{val}</code>{m.group(3)}"
-    return _VAL_RE.sub(w, t)
+    parts = re.split(r"(<pre>.*?</pre>)", t, flags=re.S)
+    return "".join(p if p.startswith("<pre>") else _VAL_RE.sub(w, p) for p in parts)
 
 
 def _delete_later(msg, secs):
