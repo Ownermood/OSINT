@@ -1792,7 +1792,7 @@ def _after_redeem(code, user_id, credits):
             full = bool(mx) and used >= mx
             if full:
                 lst = "\n".join(f"{i}. {w}" for i, w in enumerate((doc.get("claimers") or []) + [who], 1))
-                text = (f"🎉 <b>CONGRATULATIONS — CODE FULLY CLAIMED</b>\n"
+                text = (f"🌸 <b>Congratulations  •  Claimed Successfully</b>\n"
                         f"<blockquote>🔑 Code : <code>{_mask_code(code)}</code>\n"
                         f"💰 Credits : <b>+{credits}</b> each\n"
                         f"👥 Claimed : <b>{used}/{mx}</b> ✅</blockquote>\n"
