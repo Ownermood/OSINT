@@ -9826,6 +9826,10 @@ def _plain_label(lbl):
     return lbl[:1].upper() + lbl[1:].lower() if lbl else lbl
 
 
+_ROW_EMO = {"phone": "📲", "number": "📲", "mobile": "📲", "cc": "🌐", "country": "🏳", "name": "👤",
+            "username": "🏷", "email": "📧", "address": "🏡", "city": "🏙", "state": "🗺"}
+
+
 def _add_copy_box(t):
     """Move every 'Label : value' line into ONE code block (Telegram adds a Copy button),
     so the info shows once — header, status and footer stay as they are."""
@@ -9840,7 +9844,7 @@ def _add_copy_box(t):
             val = _h.unescape(re.sub(r"<[^>]+>", "", m.group(2))).strip()
             if lbl and val and not any(x in lbl.lower() for x in _SKIP_COPY):
                 if val not in ("—", "-", "N/A", "None"):
-                    rows.append(f"{lbl:<10}: {val}")
+                    rows.append(f"{_ROW_EMO.get(lbl.lower(), '🔹')} {lbl:<9}: {val}")
                 tags = "".join(re.findall(r"</?blockquote[^>]*>", line))   # keep HTML balanced
                 if tags:
                     out_lines.append(tags)
@@ -9853,7 +9857,7 @@ def _add_copy_box(t):
     before = "\n".join(out_lines[:at])
     inside_quote = before.count("<blockquote") > before.count("</blockquote>")
     # a code block inside a quote loses Telegram's Copy button → close the quote around it
-    block = f"</blockquote>\n<pre><code class='language-Copy'>{box}</code></pre>\n<blockquote>" if inside_quote else f"<pre><code class='language-Copy'>{box}</code></pre>"
+    block = f"</blockquote>\n<pre>{box}</pre>\n<blockquote>" if inside_quote else f"<pre>{box}</pre>"
     out_lines.insert(at, block)
     out = "\n".join(out_lines)
     out = re.sub(r"<blockquote[^>]*>\s*(<pre>.*?</pre>)\s*</blockquote>", r"\1", out, flags=re.S)
