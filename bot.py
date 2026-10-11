@@ -907,8 +907,8 @@ API_ENDPOINTS = {
 }
 
 NEW_USER_CREDITS = 0  # new users get free searches instead (FREE_SEARCH_PM / FREE_SEARCH_GROUP)
-REFERRAL_BONUS_REFERRER = 5
-REFERRAL_BONUS_NEW = 10
+REFERRAL_BONUS_REFERRER = 1   # credits the referrer gets per new user
+REFERRAL_BONUS_NEW = 0        # new users get daily free searches instead
 COMMAND_COST = 1
 AUTO_DELETE_TIME = 120
 
@@ -1270,37 +1270,56 @@ def get_user(user_id):
     except Exception:
         return None
 
+_col_pending_ref = _db["pending_refs"]
+
+
+def save_pending_ref(user_id, ref):
+    """Remember who referred a not-yet-registered user (survives the force-join step)."""
+    try:
+        if ref and int(ref) != int(user_id) and not _col_users.find_one({"user_id": user_id}, {"_id": 1}):
+            _col_pending_ref.update_one({"uid": user_id}, {"$set": {"ref": int(ref)}}, upsert=True)
+    except Exception:
+        pass
+
+
 def create_user(user_id, username, first_name, referred_by=None):
     try:
         if _col_users.find_one({"user_id": user_id}):
             return False
+        if not referred_by:
+            pend = _col_pending_ref.find_one_and_delete({"uid": user_id})
+            referred_by = pend.get("ref") if pend else None
         join_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        credits = NEW_USER_CREDITS
-        is_admin_flag = 1 if user_id == ADMIN_ID else 0
         ref_id = None
-        if referred_by and referred_by != user_id:
-            referrer = _col_users.find_one({"user_id": referred_by})
-            if referrer:
-                _col_users.update_one({"user_id": referred_by},
-                    {"$inc": {"credits": REFERRAL_BONUS_REFERRER, "referral_count": 1}})
-                _col_referrals.insert_one({
-                    "referrer_id": referred_by, "referred_id": user_id,
-                    "date": join_date, "credits_given": REFERRAL_BONUS_REFERRER
-                })
-                credits += REFERRAL_BONUS_NEW
-                ref_id = referred_by
+        if referred_by and referred_by != user_id and _col_users.find_one({"user_id": referred_by}, {"_id": 1}):
+            ref_id = referred_by
+        # insert first: user_id is unique, so a double /start can never credit twice
         _col_users.insert_one({
             "user_id": user_id, "username": username or "N/A",
-            "first_name": first_name or "User", "credits": credits,
-            "is_admin": is_admin_flag, "referred_by": ref_id,
+            "first_name": first_name or "User",
+            "credits": NEW_USER_CREDITS + (REFERRAL_BONUS_NEW if ref_id else 0),
+            "is_admin": 1 if user_id == ADMIN_ID else 0, "referred_by": ref_id,
             "referral_count": 0, "join_date": join_date, "last_active": join_date,
-            "total_commands": 0, "joined_channel1": 0, "joined_channel2": 0,
-            "joined_channel3": 0, "is_blocked": 0,
+            "total_commands": 0, "is_blocked": 0,
         })
+        if ref_id:
+            _col_users.update_one({"user_id": ref_id},
+                                  {"$inc": {"credits": REFERRAL_BONUS_REFERRER, "referral_count": 1}})
+            _col_referrals.insert_one({"referrer_id": ref_id, "referred_id": user_id,
+                                       "referred_name": first_name or "User",
+                                       "date": join_date, "credits_given": REFERRAL_BONUS_REFERRER})
+            try:
+                import html as _h
+                send_with_premium(ref_id,
+                    f"🎉 <b>New Referral!</b>\n\n<a href=\"tg://user?id={user_id}\">{_h.escape(first_name or 'User')}</a> "
+                    f"joined using your link.\n💰 +{REFERRAL_BONUS_REFERRER} credit added.\n\nSee /refer for your history.")
+            except Exception:
+                pass
         return True
     except DuplicateKeyError:
         return False
-    except Exception:
+    except Exception as e:
+        print(f"create_user error: {e}")
         return False
 
 def get_credits(user_id):
@@ -5502,6 +5521,9 @@ def start_cmd(message):
     # clickable name (opens the user's profile) — like an inline mention
     name_link = f'<a href="tg://user?id={user_id}">{_hn.escape(first_name)}</a>'
 
+    # keep the referral even if the user must join channels first
+    save_pending_ref(user_id, extract_referral(message.text))
+
     # ── STEP 1: Force-join check (channels must be joined first) ──
     if not enforce_force_join(message):
         return
@@ -5831,19 +5853,33 @@ def refer_cmd(message):
     if not enforce_force_join(message):
         return
 
+    import html as _h
     bot_user = bot.get_me().username
     link = f"https://t.me/{bot_user}?start=ref_{user_id}"
-    msg = f"""
-🔗 YOUR REFERRAL LINK
-
-📨 <code>{link}</code>
-
-📋 Rules:
-• Friend gets: {REFERRAL_BONUS_NEW} credits
-• You gets: {REFERRAL_BONUS_REFERRER} credits
-"""
     try:
-        sent = send_with_premium(chat_id, msg, parse_mode='HTML')
+        total = _col_referrals.count_documents({"referrer_id": user_id})
+        hist = list(_col_referrals.find({"referrer_id": user_id}).sort("date", -1).limit(10))
+    except Exception:
+        total, hist = 0, []
+    earned = total * REFERRAL_BONUS_REFERRER
+    rows = "\n".join(
+        f"{i}. <a href=\"tg://user?id={d['referred_id']}\">{_h.escape(d.get('referred_name') or str(d['referred_id']))}</a>"
+        f" · {str(d.get('date', ''))[:10]} · +{d.get('credits_given', REFERRAL_BONUS_REFERRER)}"
+        for i, d in enumerate(hist, 1)) or "No referrals yet — share your link!"
+    msg = (
+        f"🔗 <b>REFER & EARN</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+        f"<blockquote>📨 Your link:\n<code>{link}</code></blockquote>\n"
+        f"<blockquote>👥 Total referrals : <b>{total}</b>\n"
+        f"💰 Credits earned : <b>{earned}</b>\n"
+        f"🎁 Per referral : <b>+{REFERRAL_BONUS_REFERRER} credit</b></blockquote>\n"
+        f"📜 <b>Recent referrals</b>\n<blockquote>{rows}</blockquote>\n"
+        f"📌 <i>A friend counts once, when they start the bot for the first time with your link.</i>"
+    )
+    mk = InlineKeyboardMarkup()
+    mk.add(create_success_button(" Share Link", url=f"https://t.me/share/url?url={link}",
+                                 icon_custom_emoji_id="6136367002979146040"))
+    try:
+        sent = send_with_premium(chat_id, msg, parse_mode='HTML', reply_markup=mk)
         schedule_deletion(sent.message_id, chat_id)
     except Exception as e:
         print(f"Error in refer command: {e}")
