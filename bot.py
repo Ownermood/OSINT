@@ -1808,7 +1808,7 @@ def force_join_message(chat_id, user_id):
     for i, ch in enumerate(missing, 1):
         name = ch.get("name") or f"Join Channel {i}"
         markup.add(create_primary_button(" " + sc(name), url=ch["url"],
-                                         icon_custom_emoji_id="6136367002979146040"))
+                                         icon_custom_emoji_id="5217890643321300022"))
     markup.add(create_success_button(" " + sc("Verify"), callback_data="check_join",
                                      icon_custom_emoji_id="6136330925253860126"))
     try:
