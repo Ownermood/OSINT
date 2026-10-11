@@ -9302,6 +9302,14 @@ def callback_handler(call):
                 if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
                     return
                 v = rm.text.strip()
+                if v.lower() != "off" and not re.fullmatch(r"-100\d{6,}|@[A-Za-z][A-Za-z0-9_]{3,}", v):
+                    edit_with_premium(cid, mid,
+                        f"<blockquote>❌ <code>{_html_mod.escape(v[:40])}</code> is not a channel ID.\n\n"
+                        "📢 Send the channel ID (starts with <code>-100</code>) or <code>@username</code>, "
+                        "or <code>off</code>.\n\n💡 To create a code, tap Back → New Code.</blockquote>",
+                        reply_markup=back)
+                    bot.register_next_step_handler_by_chat_id(cid, _on_log)
+                    return
                 if v.lower() == "off":
                     set_setting("redeem_log_chat", None)
                     note = "✅ Claim log turned off.\n\n"
