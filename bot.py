@@ -926,14 +926,15 @@ try:
         print(f"   Host : {_mongo_client.address}")
     except Exception:
         print("   Host : (connected)")
-    print(f"   DB   : {os.getenv('MONGO_DB', 'osint_bot')}")
+    print(f"   DB   : {os.getenv('MONGO_DB') or 'osint_bot_' + str(BOT_TOKEN).split(':')[0]}")
 except Exception as _mongo_err:
     print(f"❌ MongoDB Connection FAILED: {_mongo_err}")
     print("   Bot cannot start without database. Fix the URI or network.")
     sys.exit(1)
 print("=" * 60)
 
-MONGO_DB = os.getenv("MONGO_DB", "osint_bot")
+# Each bot gets its own database automatically (named by bot id), unless MONGO_DB is set.
+MONGO_DB = os.getenv("MONGO_DB") or "osint_bot_" + str(BOT_TOKEN).split(":")[0]
 _db = _mongo_client[MONGO_DB]
 
 # New database (e.g. new bot): copy settings from the old one once — users/credits start fresh.
