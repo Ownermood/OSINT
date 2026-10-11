@@ -7350,9 +7350,14 @@ def codes_view():
 def redeem_keypad(st):
     """Number pad for max users."""
     cur = st.get("cur", "")
+    if st.get("step") == "credits":
+        info = (f"Code: <code>{st['code']}</code>\n\n<b>Step 2:</b> how many credits per claim?\n\n"
+                f"💰 Credits : <b>{cur or '0'}</b>")
+    else:
+        info = (f"Code: <code>{st['code']}</code> · {st['credits']} credits\n\n"
+                f"<b>Step 3:</b> how many users can claim?\n\n👥 Max users : <b>{cur or '0'}</b>")
     text = (f"🎟 <b>CREATE REDEEM CODE</b>\n━━━━━━━━━━━━━━━━━━━━\n"
-            f"<blockquote>Code: <code>{st['code']}</code> · {st['credits']} credits\n\n"
-            f"<b>Step 3:</b> how many users can claim?\n\n👥 Max users : <b>{cur or '0'}</b></blockquote>\n"
+            f"<blockquote>{info}</blockquote>\n"
             f"<i>Tap the numbers, then Done. (You can also type the number.)</i>")
     mk = InlineKeyboardMarkup(row_width=3)
     for row in (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9")):
@@ -9257,7 +9262,15 @@ def callback_handler(call):
                 st["cur"] = st["cur"][:-1]
             elif v == "ok":
                 if int(st["cur"] or 0) < 1:
-                    bot.answer_callback_query(call.id, "❌ Enter at least 1 user.", True)
+                    bot.answer_callback_query(call.id, "❌ Enter a number above 0.", True)
+                    return
+                if st.get("step") == "credits":
+                    st.update(credits=int(st["cur"]), step="max", cur="")
+                    bot.answer_callback_query(call.id)
+                    bot.clear_step_handler_by_chat_id(st["cid"])
+                    bot.register_next_step_handler_by_chat_id(st["cid"], st["s3"])
+                    t, kp = redeem_keypad(st)
+                    edit_with_premium(st["cid"], st["mid"], t, reply_markup=kp)
                     return
                 bot.answer_callback_query(call.id, "Created")
                 bot.clear_step_handler_by_chat_id(st["cid"])
@@ -9333,16 +9346,22 @@ def callback_handler(call):
                     ask(f"❌ <code>{c}</code> already exists.\n\n<b>Step 1:</b> send another code or <code>auto</code>", s1)
                     return
                 st["code"] = c
-                ask(f"Code: <code>{c}</code>\n\n<b>Step 2:</b> how many credits per claim? e.g. <code>10</code>", s2)
+                st.update(step="credits", cur="", cid=cid, mid=mid, s3=s3)
+                _RKP[rm.from_user.id] = st
+                t, kp = redeem_keypad(st)
+                edit_with_premium(cid, mid, t, reply_markup=kp)
+                bot.register_next_step_handler_by_chat_id(cid, s2)
 
             def s2(rm):
                 if _bad(rm):
                     return
+                if _RKP.get(rm.from_user.id) is not st or st.get("step") != "credits":
+                    return   # already done with the keypad
                 if not rm.text.strip().isdigit() or int(rm.text) <= 0:
-                    ask("❌ Send a number above 0.\n\n<b>Step 2:</b> credits per claim, e.g. <code>10</code>", s2)
+                    bot.register_next_step_handler_by_chat_id(cid, s2)
                     return
                 st["credits"] = int(rm.text)
-                st.update(cur="", cid=cid, mid=mid)
+                st.update(step="max", cur="")
                 _RKP[rm.from_user.id] = st
                 t, kp = redeem_keypad(st)
                 edit_with_premium(cid, mid, t, reply_markup=kp)
@@ -9354,7 +9373,7 @@ def callback_handler(call):
                 if not rm.text.strip().isdigit() or int(rm.text) <= 0:
                     ask("❌ Send a number above 0.\n\n<b>Step 3:</b> max claims, e.g. <code>10</code>", s3)
                     return
-                if _RKP.get(rm.from_user.id) is not st:
+                if _RKP.get(rm.from_user.id) is not st or st.get("step") != "max":
                     return   # already finished with the keypad
                 st["max"] = int(rm.text)
                 # no expiry date: the code ends when all claims are used
