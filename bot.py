@@ -1270,6 +1270,17 @@ def get_user(user_id):
     except Exception:
         return None
 
+def premium_notice(title, lines, footer=None):
+    """Premium-styled DM: emoji header, quote box body, italic footer."""
+    T = lambda i, f: te(i, f)
+    body = "\n".join(lines)
+    out = (f"<blockquote>{T('6136525109315245846', '✨')} <b>{title}</b> {T('6136525109315245846', '✨')}</blockquote>\n"
+           f"<blockquote>{body}</blockquote>")
+    if footer:
+        out += f"\n{T('6138500424904219564', '➡️')} <i>{footer}</i>"
+    return out
+
+
 _col_pending_ref = _db["pending_refs"]
 
 
@@ -1310,9 +1321,13 @@ def create_user(user_id, username, first_name, referred_by=None):
                                        "date": join_date, "credits_given": REFERRAL_BONUS_REFERRER})
             try:
                 import html as _h
-                send_with_premium(ref_id,
-                    f"🎉 <b>New Referral!</b>\n\n<a href=\"tg://user?id={user_id}\">{_h.escape(first_name or 'User')}</a> "
-                    f"joined using your link.\n💰 +{REFERRAL_BONUS_REFERRER} credit added.\n\nSee /refer for your history.")
+                tot = _col_users.find_one({"user_id": ref_id}, {"credits": 1, "referral_count": 1}) or {}
+                send_with_premium(ref_id, premium_notice("New Referral", [
+                    f"{te('5424968454228680999', '🎉')} <a href=\"tg://user?id={user_id}\">{_h.escape(first_name or 'User')}</a> joined with your link",
+                    f"{te('6136159783692017451', '💰')} Reward : <b>+{REFERRAL_BONUS_REFERRER} credit</b>",
+                    f"{te('5424611538151437896', '👥')} Total referrals : <b>{tot.get('referral_count', 0)}</b>",
+                    f"{te('6136231213293116410', '🏆')} Balance : <b>{tot.get('credits', 0)} credits</b>",
+                ], "Keep sharing — see /refer for your history"))
             except Exception:
                 pass
         return True
@@ -7009,9 +7024,14 @@ def protect_cmd(message):
 
 
 def _notify_protect_added(uid, num, days):
-    span = "lifetime" if int(days) == 0 else f"{days} days"
+    span = "Lifetime" if int(days) == 0 else f"{days} days"
     try:
-        send_with_premium(uid, f"🔒 <b>Number Protection Active</b>\n\nYour number <code>{num}</code> is now protected for <b>{span}</b>.\nIt won't appear in any search on this bot.\n\nSee /start → My Protection.")
+        send_with_premium(uid, premium_notice("Number Protection Active", [
+            f"{te('6019328362479097179', '🔒')} Number : <code>{num}</code>",
+            f"{te('6138579366403119002', '⏳')} Validity : <b>{span}</b>",
+            f"{te('6136205108481890460', '🫡')} Status : <b>Protected</b>",
+            "Your number will not appear in any search on this bot.",
+        ], "Thank you for your purchase! See /start → My Protection"))
     except Exception:
         pass
 
@@ -7347,12 +7367,22 @@ def add_credits_cmd(message):
     try:
         target_id = int(parts[1])
         amount = int(parts[2])
+        if amount <= 0:
+            send_with_premium(message.chat.id, "❌ Amount must be more than 0.")
+            return
+        if not _col_users.find_one({"user_id": target_id}, {"_id": 1}):
+            send_with_premium(message.chat.id, "❌ User not found. They must /start the bot first.")
+            return
         if add_credits(target_id, amount):
             new_balance = get_credits(target_id)
             send_with_premium(message.chat.id, f"✅ Added {amount} credits to {target_id}\n💰 New Balance: {new_balance}")
             try:
-                send_with_premium(target_id, f"✅ Admin added {amount} credits!\n💰 New Balance: {new_balance}")
-            except:
+                send_with_premium(target_id, premium_notice("Credits Added", [
+                    f"{te('6136204644625423818', '🤑')} Added : <b>+{amount} credits</b>",
+                    f"{te('6136159783692017451', '💰')} New balance : <b>{new_balance} credits</b>",
+                    f"{te('6136205108481890460', '🫡')} Status : <b>Active</b>",
+                ], "Thank you for your purchase! Happy searching"))
+            except Exception:
                 pass
         else:
             send_with_premium(message.chat.id, "❌ Failed to add credits!")
@@ -9677,9 +9707,10 @@ if __name__ == "__main__":
                     _PROTECTED_CACHE["t"] = 0
                     if d.get("user_id"):
                         try:
-                            send_with_premium(d["user_id"],
-                                "⏳ <b>Protection Expired</b>\n\nYour number <code>" + str(d["num"]) +
-                                "</code> is no longer protected.\nRenew it via /start → Buy Credits / Protect Number.")
+                            send_with_premium(d["user_id"], premium_notice("Protection Expired", [
+                                f"{te('6019328362479097179', '🔒')} Number : <code>{d['num']}</code>",
+                                f"{te('6136281850957535879', '⚠️')} Status : <b>Not protected anymore</b>",
+                            ], "Renew via /start → Buy Credits / Protect Number"))
                         except Exception:
                             pass
             except Exception as _e:
