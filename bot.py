@@ -1775,19 +1775,50 @@ def _after_redeem(code, user_id, credits):
     try:
         doc = _col_codes.find_one({"code": code}) or {}
         used, mx = doc.get("used_count", 0), doc.get("max_uses", 0)
-        u = _col_users.find_one({"user_id": user_id}) or {}
-        name = _html_mod.escape(str(u.get("first_name") or u.get("name") or "User"))
+        # real Telegram name (+ @username) of the user
+        try:
+            ch = bot.get_chat(user_id)
+            nm, un = (ch.first_name or "") + (" " + ch.last_name if ch.last_name else ""), ch.username
+        except Exception:
+            u = _col_users.find_one({"user_id": user_id}) or {}
+            nm, un = u.get("first_name"), u.get("username")
+        nm = (nm or "").strip() or "User"
+        if un in ("N/A", "None"):
+            un = None
+        who = f'<a href="tg://user?id={user_id}">{_html_mod.escape(nm)}</a>' + (f" (@{un})" if un else "")
+        _col_codes.update_one({"code": code}, {"$push": {"claimers": who}})
         chat = get_setting("redeem_log_chat")
         if chat:
-            try:
-                send_with_premium(chat,
-                    f"🎟 <b>CODE REDEEMED</b>\n"
-                    f"<blockquote>👤 User : <a href=\"tg://user?id={user_id}\">{name}</a>\n"
-                    f"🔑 Code : <code>{_mask_code(code)}</code>\n"
-                    f"💰 Credits : <b>+{credits}</b>\n"
-                    f"👥 Claimed : <b>{used}/{mx}</b></blockquote>")
-            except Exception as e:
-                print(f"redeem log: {e}")
+            full = bool(mx) and used >= mx
+            if full:
+                lst = "\n".join(f"{i}. {w}" for i, w in enumerate((doc.get("claimers") or []) + [who], 1))
+                text = (f"🎉 <b>CONGRATULATIONS — CODE FULLY CLAIMED</b>\n"
+                        f"<blockquote>🔑 Code : <code>{_mask_code(code)}</code>\n"
+                        f"💰 Credits : <b>+{credits}</b> each\n"
+                        f"👥 Claimed : <b>{used}/{mx}</b> ✅</blockquote>\n"
+                        f"<blockquote expandable>🏆 <b>Winners</b>\n{lst}</blockquote>\n"
+                        f"----------\n🌸 Thank you ➜ @{bot.get_me().username}")
+            else:
+                text = (f"🎟 <b>CODE REDEEMED</b>\n"
+                        f"<blockquote>👤 User : {who}\n"
+                        f"🔑 Code : <code>{_mask_code(code)}</code>\n"
+                        f"💰 Credits : <b>+{credits}</b>\n"
+                        f"👥 Claimed : <b>{used}/{mx}</b></blockquote>\n"
+                        f"----------\n🌸 Thank you ➜ @{bot.get_me().username}")
+            sent = None
+            if doc.get("log_mid"):
+                try:   # same message gets updated on every claim
+                    sent = edit_with_premium(chat, doc["log_mid"], text)
+                except Exception as e:
+                    if "not modified" in str(e).lower():
+                        sent = True
+            if not sent:
+                try:
+                    m = send_with_premium(chat, text)
+                    if m:
+                        _col_codes.update_one({"code": code}, {"$set": {"log_mid": m.message_id}})
+                except Exception as e:
+                    print(f"redeem log: {e}")
         if mx and used >= mx:
             for aid in {ADMIN_ID, doc.get("created_by")}:
                 if not aid:
@@ -6163,7 +6194,7 @@ def redeem_cmd(message):
         return
 
     code = parts[1].strip().upper()
-    wait_msg = send_with_premium(chat_id, f"🔍 Verifying code: {code}...")
+    wait_msg = send_with_premium(chat_id, f"🔍 Verifying code: <code>{code}</code>...")
     success, result = redeem_credits(user_id, code)
 
     if success:
@@ -6173,7 +6204,7 @@ def redeem_cmd(message):
 
         final_msg = f"""✅ REDEMPTION SUCCESSFUL! ✅
 
-🎫 Code: {code}
+🎫 Code: <code>{code}</code>
 💰 Credits Added: +{amount}
 💳 New Balance: {new_credits} credits
 
@@ -6188,7 +6219,7 @@ def redeem_cmd(message):
     else:
         final_msg = f"""❌ REDEMPTION FAILED ❌
 
-🎫 Code: {code}
+🎫 Code: <code>{code}</code>
 ❌ Error: {result}
 
 💡 Possible reasons:
@@ -9269,8 +9300,9 @@ def callback_handler(call):
                     bot.answer_callback_query(call.id)
                     bot.clear_step_handler_by_chat_id(st["cid"])
                     bot.register_next_step_handler_by_chat_id(st["cid"], st["s3"])
-                    t, kp = redeem_keypad(st)
-                    edit_with_premium(st["cid"], st["mid"], t, reply_markup=kp)
+                    cancel = InlineKeyboardMarkup()
+                    cancel.add(create_danger_button(" Cancel", callback_data="admin_codes", icon_custom_emoji_id=ADMIN_BACK_ICON))
+                    edit_with_premium(st["cid"], st["mid"], f"🎟 <b>CREATE REDEEM CODE</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Code: <code>{st['code']}</code> · {st['credits']} credits\n\n<b>Step 3:</b> how many users can claim? Type the number, e.g. <code>10</code></blockquote>", reply_markup=cancel)
                     return
                 bot.answer_callback_query(call.id, "Created")
                 bot.clear_step_handler_by_chat_id(st["cid"])
@@ -9363,18 +9395,18 @@ def callback_handler(call):
                 st["credits"] = int(rm.text)
                 st.update(step="max", cur="")
                 _RKP[rm.from_user.id] = st
-                t, kp = redeem_keypad(st)
-                edit_with_premium(cid, mid, t, reply_markup=kp)
+                edit_with_premium(cid, mid, f"🎟 <b>CREATE REDEEM CODE</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Code: <code>{st['code']}</code> · {st['credits']} credits\n\n<b>Step 3:</b> how many users can claim? Type the number, e.g. <code>10</code></blockquote>", reply_markup=cancel)
                 bot.register_next_step_handler_by_chat_id(cid, s3)
 
             def s3(rm):
                 if _bad(rm):
                     return
                 if not rm.text.strip().isdigit() or int(rm.text) <= 0:
-                    ask("❌ Send a number above 0.\n\n<b>Step 3:</b> max claims, e.g. <code>10</code>", s3)
+                    if _RKP.get(rm.from_user.id) is st:
+                        ask("❌ Send a number above 0.\n\n<b>Step 3:</b> max users, e.g. <code>10</code>", s3)
                     return
                 if _RKP.get(rm.from_user.id) is not st or st.get("step") != "max":
-                    return   # already finished with the keypad
+                    return   # code already created
                 st["max"] = int(rm.text)
                 # no expiry date: the code ends when all claims are used
                 finish_redeem_code(st, rm.from_user.id, cid, mid)
