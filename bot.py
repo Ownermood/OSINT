@@ -7378,28 +7378,6 @@ def codes_view():
     return text, mk
 
 
-def redeem_keypad(st):
-    """Number pad for max users."""
-    cur = st.get("cur", "")
-    if st.get("step") == "credits":
-        info = (f"Code: <code>{st['code']}</code>\n\n<b>Step 2:</b> how many credits per claim?\n\n"
-                f"💰 Credits : <b>{cur or '0'}</b>")
-    else:
-        info = (f"Code: <code>{st['code']}</code> · {st['credits']} credits\n\n"
-                f"<b>Step 3:</b> how many users can claim?\n\n👥 Max users : <b>{cur or '0'}</b>")
-    text = (f"🎟 <b>CREATE REDEEM CODE</b>\n━━━━━━━━━━━━━━━━━━━━\n"
-            f"<blockquote>{info}</blockquote>\n"
-            f"<i>Tap the numbers, then Done. (You can also type the number.)</i>")
-    mk = InlineKeyboardMarkup(row_width=3)
-    for row in (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9")):
-        mk.row(*[create_primary_button(f" {n}", callback_data=f"admin_rkp_{n}") for n in row])
-    mk.row(create_danger_button(" Delete", callback_data="admin_rkp_del", icon_custom_emoji_id=ADMIN_BACK_ICON),
-           create_primary_button(" 0", callback_data="admin_rkp_0"),
-           create_success_button(" Done", callback_data="admin_rkp_ok", icon_custom_emoji_id="6019175208240289774"))
-    mk.row(create_danger_button(" Cancel", callback_data="admin_codes", icon_custom_emoji_id=ADMIN_BACK_ICON))
-    return text, mk
-
-
 _RKP = {}   # admin id → draft code waiting for the keypad
 
 
@@ -9283,40 +9261,8 @@ def callback_handler(call):
             edit_with_premium(cid, mid, t, reply_markup=mk)
             return
 
-        if call.data.startswith("admin_rkp_"):
-            st = _RKP.get(call.from_user.id)
-            if not st:
-                bot.answer_callback_query(call.id, "This screen expired. Tap New Code again.", True)
-                return
-            v = call.data[len("admin_rkp_"):]
-            if v == "del":
-                st["cur"] = st["cur"][:-1]
-            elif v == "ok":
-                if int(st["cur"] or 0) < 1:
-                    bot.answer_callback_query(call.id, "❌ Enter a number above 0.", True)
-                    return
-                if st.get("step") == "credits":
-                    st.update(credits=int(st["cur"]), step="max", cur="")
-                    bot.answer_callback_query(call.id)
-                    bot.clear_step_handler_by_chat_id(st["cid"])
-                    bot.register_next_step_handler_by_chat_id(st["cid"], st["s3"])
-                    cancel = InlineKeyboardMarkup()
-                    cancel.add(create_danger_button(" Cancel", callback_data="admin_codes", icon_custom_emoji_id=ADMIN_BACK_ICON))
-                    edit_with_premium(st["cid"], st["mid"], f"🎟 <b>CREATE REDEEM CODE</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Code: <code>{st['code']}</code> · {st['credits']} credits\n\n<b>Step 3:</b> how many users can claim? Type the number, e.g. <code>10</code></blockquote>", reply_markup=cancel)
-                    return
-                bot.answer_callback_query(call.id, "Created")
-                bot.clear_step_handler_by_chat_id(st["cid"])
-                st["max"] = int(st["cur"])
-                finish_redeem_code(st, call.from_user.id, st["cid"], st["mid"])
-                return
-            else:
-                st["cur"] = (st["cur"] + v).lstrip("0")[:6]
-            bot.answer_callback_query(call.id)
-            t, kp = redeem_keypad(st)
-            try:
-                edit_with_premium(st["cid"], st["mid"], t, reply_markup=kp)
-            except Exception:
-                pass
+        if call.data.startswith("admin_rkp_"):   # old keypad (removed) — screen expired
+            bot.answer_callback_query(call.id, "This screen expired. Tap New Code again.", True)
             return
 
         if call.data == "admin_codelog":
