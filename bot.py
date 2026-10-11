@@ -7691,15 +7691,32 @@ def callback_handler(call):
             fn(_cb_msg(txt))
             return
 
+        _admin_ask = {
+            "admin_addcredits": (add_credits_cmd, "/add", "user_id amount"),
+            "admin_removecredits": (remove_credits_cmd, "/removecredit", "user_id amount"),
+            "admin_block": (block_cmd, "/block", "user_id"),
+            "admin_unblock": (unblock_cmd, "/unblock", "user_id"),
+            "admin_makeadmin": (promote_cmd, "/promote", "user_id"),
+            "admin_removeadmin": (demote_cmd, "/demote", "user_id"),
+            "admin_broadcast_info": (broadcast_cmd, "/broadcast", "broadcast message"),
+            "admin_setbc_info": (setbc_cmd, "/setbc", "channel_id"),
+        }
+        if call.data in _admin_ask:
+            fn, cmd, hint = _admin_ask[call.data]
+            bot.answer_callback_query(call.id)
+            prompt = bot.send_message(call.message.chat.id, f"✏️ Send <b>{hint}</b> (or /cancel):", parse_mode="HTML")
+
+            def _on_reply(rm, fn=fn, cmd=cmd):
+                if not rm.text or rm.text.startswith("/cancel") or not is_admin(rm.from_user.id):
+                    bot.send_message(rm.chat.id, "❌ Cancelled.")
+                    return
+                rm.text = f"{cmd} {rm.text.strip()}"
+                fn(rm)
+
+            bot.register_next_step_handler(prompt, _on_reply)
+            return
+
         _admin_usage = {
-            "admin_addcredits": "Usage: /add <user_id> <amount>",
-            "admin_removecredits": "Usage: /removecredit <user_id> <amount>",
-            "admin_block": "Usage: /block <user_id>",
-            "admin_unblock": "Usage: /unblock <user_id>",
-            "admin_makeadmin": "Usage: /promote <user_id>",
-            "admin_removeadmin": "Usage: /demote <user_id>",
-            "admin_broadcast_info": "Usage: /broadcast <message> (or reply to a message)",
-            "admin_setbc_info": "Usage: /setbc <channel_id>",
             "admin_addmedia": "Usage: /addvideo or /addphoto, then send media and /done",
             "admin_reload": "Restart the bot process to reload.",
         }
