@@ -286,6 +286,7 @@ _EM = {
     "🎶": "5424729550967807644", "👤": "5424611538151437896", "👥": "5425009896368120119",
     "💬": "5424611538151437896", "🔐": "6138450100772411870", "🔒": "6138450100772411870",
     "🔓": "6136198451282581752", "✍": "6136389654636665179", "🆕": "6136525109315245846",
+    "❎": "5217890643321300022", "✖": "5217890643321300022",
 }
 
 
@@ -7568,7 +7569,7 @@ def addc_step_link(message):
         create_primary_button("🔐 Request to Join",
             callback_data=f"addc_mode_{token}_1")
     )
-    markup.add(create_danger_button("❌ Cancel", callback_data="addc_skip"))
+    markup.add(create_danger_button(" Cancel", callback_data="addc_skip", icon_custom_emoji_id="5217890643321300022"))
 
     send_with_premium(
         message.chat.id,
@@ -8036,7 +8037,7 @@ def callback_handler(call):
                         callback_data=f"addc_mode_{pseudo_user}_{int(is_private)}_1"
                     )
                 )
-                markup.add(create_danger_button("❌ Cancel", callback_data="addc_skip"))
+                markup.add(create_danger_button(" Cancel", callback_data="addc_skip", icon_custom_emoji_id="5217890643321300022"))
                 bot.answer_callback_query(call.id)
                 try:
                     bot.edit_message_text(
