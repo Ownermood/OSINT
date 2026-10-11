@@ -2469,7 +2469,7 @@ def call_tg_api(query):
         r = records[0]
         tgid     = str(r.get("user_id",  "")).strip() or "N/A"
         username = str(r.get("username", "")).strip().lstrip("@") or "N/A"
-        phone    = str(r.get("number",   "")).strip() or None
+        phone    = str(r.get("number") or r.get("mobile") or "").strip() or None
         name     = str(r.get("name",     "")).strip() or "N/A"
         country  = str(r.get("country",  "")).strip() or "N/A"
         cc       = str(r.get("country_code", "")).strip() or "N/A"
@@ -2494,7 +2494,7 @@ def call_tg_api(query):
         msg = data.get("msg", "")
         if "not found" in msg.lower() or "no data" in msg.lower():
             return None
-        phone = data.get("number") or None
+        phone = data.get("number") or data.get("mobile") or data.get("phone") or None
         if not phone:
             return None
         tgid = None
@@ -2517,6 +2517,33 @@ def call_tg_api(query):
             "country_code": str(data.get("country_code") or "N/A"),
             "msg":          msg or "Details fetched",
         }
+
+    # ── Attempt 0: the URL set in Admin → API Manager, flat JSON
+    #    e.g. {"success":true,"telegram_id":..,"mobile":..,"country_code":..,"country":..}
+    try:
+        _ep = get_api_endpoint('tgid')
+        if _ep:
+            d0 = make_api_request(build_api_url(_ep, query), timeout=15)
+            if isinstance(d0, dict) and d0.get("success") in (True, "true", 1):
+                ph = d0.get("mobile") or d0.get("phone") or d0.get("number") or d0.get("phone_number")
+                if ph:
+                    cc0 = str(d0.get("country_code") or "").strip()
+                    ph = str(ph).strip()
+                    return {
+                        "status":       "success",
+                        "query":        query,
+                        "found":        True,
+                        "tgid":         str(d0.get("telegram_id") or d0.get("tg_id") or d0.get("user_id") or d0.get("info") or query),
+                        "username":     str(d0.get("username") or "N/A").lstrip("@"),
+                        "name":         str(d0.get("name") or "N/A"),
+                        "phone":        ph if ph.startswith("+") or not cc0 else f"{cc0}{ph}",
+                        "number":       ph,
+                        "country":      str(d0.get("country") or "N/A"),
+                        "country_code": cc0 or "N/A",
+                        "msg":          "Details fetched",
+                    }
+    except Exception as e0:
+        print(f"[TGID] custom API error: {e0}")
 
     # ── Attempt 1: felix (tg_id numeric only) ─────────────────────
     if is_user_id:
