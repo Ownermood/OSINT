@@ -1474,6 +1474,9 @@ def load_channels_from_db():
     try:
         # remove old repo channels, make sure our channels exist
         _col_channels.delete_many({"username": {"$in": _OLD_DEFAULT_CHANNELS}})
+        # drop duplicate entries of our channels that point to another link
+        for _u, _n, _nm in DEFAULT_FORCE_CHANNELS:
+            _col_channels.delete_many({"username": _n, "url": {"$ne": _u}})
         for _u, _n, _nm in DEFAULT_FORCE_CHANNELS:
             try:
                 _col_channels.update_one({"username": _n, "name": {"$exists": False}},
