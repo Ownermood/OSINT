@@ -771,7 +771,7 @@ API_ENDPOINTS = {
     "family": "PASTE_API_HERE&id={query}"   # ← API OF FAMILY INFO,
 }
 
-NEW_USER_CREDITS = 10
+NEW_USER_CREDITS = 0  # new users get free searches instead (FREE_SEARCH_PM / FREE_SEARCH_GROUP)
 REFERRAL_BONUS_REFERRER = 5
 REFERRAL_BONUS_NEW = 10
 COMMAND_COST = 1
@@ -1162,18 +1162,41 @@ def get_credits(user_id):
 
 def deduct_credit(user_id):
     try:
-        doc = _col_users.find_one({"user_id": user_id}, {"credits": 1})
-        if not doc:
+        if not _col_users.find_one({"user_id": user_id}, {"_id": 1}):
             return True
-        if doc["credits"] <= 0:
-            return False
-        _col_users.update_one({"user_id": user_id}, {
+        # atomic: only deduct when credits > 0 (no negative balance on parallel requests)
+        res = _col_users.update_one({"user_id": user_id, "credits": {"$gt": 0}}, {
             "$inc": {"credits": -1, "total_commands": 1},
             "$set": {"last_active": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         })
-        return True
+        return res.modified_count == 1
     except Exception:
         return True
+
+
+FREE_SEARCH_PM = 3
+FREE_SEARCH_GROUP = 5
+
+
+def charge_search(message):
+    """Free searches first (PM: 3, Group: 5 per user), then 1 credit per search."""
+    user_id = message.from_user.id
+    if is_admin(user_id):
+        return True
+    in_group = message.chat.type in ("group", "supergroup")
+    field, limit = ("free_gc_used", FREE_SEARCH_GROUP) if in_group else ("free_pm_used", FREE_SEARCH_PM)
+    try:
+        if not _col_users.find_one({"user_id": user_id}, {"_id": 1}):
+            create_user(user_id, message.from_user.username, message.from_user.first_name)
+        res = _col_users.update_one(
+            {"user_id": user_id, "$or": [{field: {"$lt": limit}}, {field: {"$exists": False}}]},
+            {"$inc": {field: 1, "total_commands": 1},
+             "$set": {"last_active": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}})
+        if res.modified_count == 1:
+            return True
+    except Exception as e:
+        print(f"charge_search error: {e}")
+    return deduct_credit(user_id)
 
 def add_credits(user_id, amount):
     try:
@@ -1431,6 +1454,9 @@ def check_subscription(user_id):
             ref    = _channel_chat_ref(channel)
             member = bot.get_chat_member(ref, user_id)
             if member.status not in ['member', 'administrator', 'creator']:
+                # private link with join requests: real request (from Telegram event) counts
+                if channel.get('username', '') in JOIN_REQUESTS_SENT.get(user_id, set()):
+                    continue
                 return False
         except Exception as e:
             err = str(e).lower()
@@ -4316,11 +4342,11 @@ def tgid_cmd(message):
         send_with_premium(chat_id, "❌ Invalid username!")
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
-            send_with_premium(chat_id, "❌ Insufficient credits!")
+    if True:
+        if not charge_search(message):
+            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
             return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     working, status_msg = check_api_status('tgid')
     if not working:
@@ -4382,11 +4408,11 @@ def num_cmd(message):
         send_with_premium(chat_id, "❌ Invalid phone number! Use 10-15 digits with optional +")
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
-            send_with_premium(chat_id, "❌ Insufficient credits!")
+    if True:
+        if not charge_search(message):
+            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
             return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     working, status_msg = check_api_status('num')
     if not working:
@@ -4457,11 +4483,11 @@ def adhr_cmd(message):
         send_with_premium(message.chat.id, "❌ Invalid Aadhar number! Use 12 digits only!")
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
+    if True:
+        if not charge_search(message):
             send_with_premium(message.chat.id, "❌ Insufficient credits!")
             return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     working, status_msg = check_api_status('adhr')
     if not working:
@@ -4540,11 +4566,11 @@ def tguser_cmd(message):
         send_with_premium(message.chat.id, "❌ Invalid username!")
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
+    if True:
+        if not charge_search(message):
             send_with_premium(message.chat.id, "❌ Insufficient credits!")
             return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     bot.send_chat_action(chat_id, 'typing')
     wait = send_searching_animation(chat_id)
@@ -4912,11 +4938,11 @@ def leak_cmd(message):
         send_with_premium(chat_id, "❌ Invalid phone number! Use 10-15 digits with optional +")
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
-            send_with_premium(chat_id, "❌ Insufficient credits!")
+    if True:
+        if not charge_search(message):
+            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
             return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     working, status_msg = check_api_status('leak')
     if not working:
@@ -5607,11 +5633,11 @@ def handle_api_command(message, command_name, api_func, validate_func, title, qu
 """)
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
-            send_with_premium(chat_id, "❌ Insufficient credits!")
+    if True:
+        if not charge_search(message):
+            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
             return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     try:
         bot.send_chat_action(chat_id, 'typing')
@@ -5680,11 +5706,11 @@ def vech_cmd(message):
 """)
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
-            send_with_premium(chat_id, "❌ Insufficient credits!")
+    if True:
+        if not charge_search(message):
+            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
             return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     try:
         bot.send_chat_action(chat_id, 'typing')
@@ -5758,11 +5784,11 @@ def vechrc_cmd(message):
 """)
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
-            send_with_premium(chat_id, "❌ Insufficient credits!")
+    if True:
+        if not charge_search(message):
+            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
             return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     try:
         bot.send_chat_action(chat_id, 'typing')
@@ -5838,10 +5864,10 @@ def upi_cmd(message):
         send_with_premium(message.chat.id, f"<blockquote>💳 UPI ID INFO</blockquote>\n<blockquote>⚠️ API MAINTENANCE\n{status_msg or 'Try again later'}</blockquote>")
         return
     chat_id = message.chat.id
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
-            send_with_premium(chat_id, "❌ Insufficient credits!"); return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    if True:
+        if not charge_search(message):
+            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo."); return
+    credits_left = get_credits(user_id)
     try: bot.send_chat_action(chat_id, 'typing')
     except Exception: pass
     wait = send_searching_animation(chat_id)
@@ -5896,11 +5922,11 @@ def family_cmd(message):
         send_with_premium(message.chat.id, "❌ Invalid Aadhar number! Use 12 digits only.")
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
+    if True:
+        if not charge_search(message):
             send_with_premium(message.chat.id, "❌ Insufficient credits!")
             return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     working, status_msg = check_api_status('family')
     if not working:
@@ -5975,11 +6001,11 @@ def snap_cmd(message):
         )
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
-            send_with_premium(chat_id, "❌ Insufficient credits!")
+    if True:
+        if not charge_search(message):
+            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
             return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     try: bot.send_chat_action(chat_id, 'typing')
     except Exception: pass
@@ -6073,12 +6099,12 @@ def ai_cmd(message):
         send_with_premium(message.chat.id, "❌ Prompt too short! Please provide at least 3 characters.")
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
+    if True:
+        if not charge_search(message):
             send_with_premium(message.chat.id, "❌ Insufficient credits! Get more via referral or redeem codes.")
             return
 
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     bot.send_chat_action(chat_id, 'upload_photo')
     wait = send_searching_animation(chat_id)
@@ -6164,11 +6190,11 @@ def num2_cmd(message):
         send_with_premium(message.chat.id, "❌ Invalid phone number! Use 10-15 digits with optional +")
         return
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
+    if True:
+        if not charge_search(message):
             send_with_premium(message.chat.id, "❌ Insufficient credits!")
             return
-    credits_left = get_credits(user_id) if not is_group_chat(message) else "∞ (Group)"
+    credits_left = get_credits(user_id)
 
     bot.send_chat_action(chat_id, 'typing')
     wait = send_searching_animation(chat_id)
@@ -6207,8 +6233,8 @@ def insta_cmd(message):
 
     username = parts[1].strip().replace('@', '')
 
-    if not is_group_chat(message):
-        if not deduct_credit(user_id):
+    if True:
+        if not charge_search(message):
             send_with_premium(message.chat.id, "❌ Insufficient credits!")
             return
         credits_left = get_credits(user_id)
@@ -6294,12 +6320,12 @@ ADMIN_MENUS = {
     ]),
     "broadcast": ("📢 Broadcast", [
         ("📢 Broadcast", "admin_broadcast_info", "Koi bhi message bhejo (text / photo / video, premium emoji ke saath) — sabko waisa hi jayega."),
-        ("📢 Broadcast Btn", "admin_ask_broadcastbtn", "Button wala broadcast. Example: <code>Hello sabko!</code>"),
+        ("📢 Broadcast Btn", "admin_bcbtn", "Message + link button. Pehle message bhejo, phir button: <code>Join Now | https://t.me/VillanCommunity</code>"),
         ("📡 Set BC Channel", "admin_setbc_info", "Is channel ki post auto sabko jayegi. Example: <code>-1001234567890</code>"),
         ("📡 Remove BC", "admin_run_removebc", "Auto broadcast channel hatao."),
     ]),
     "channels": ("📡 Channels", [
-        ("➕ Add Channel", "admin_ask_addc", "Force join channel jodo. Example: <code>https://t.me/VillanCommunity</code>"),
+        ("➕ Add Channel", "admin_ask_addc", "Force join channel jodo. Bot step-by-step puchega: pehle Chat ID (<code>-1004443904846</code>), phir link (<code>https://t.me/VillanCommunity</code>). Bot ko channel mein admin banana zaroori hai."),
         ("➖ Remove Channel", "admin_ask_removec", "Channel hatao. Example: <code>VillanCommunity</code>"),
         ("📋 List Channels", "admin_run_listc", "Saare force join channels."),
         ("🔒 Lock Force Join", "admin_run_lockf", "Force join ON."),
@@ -6353,7 +6379,7 @@ ADMIN_ACTIONS = {
     "admin_ask_deletecode": ("delete_code_cmd", "/deletecode", True),
     "admin_ask_broadcastbtn": ("broadcast_btn_cmd", "/broadcastbtn", True),
     "admin_run_removebc": ("removebc_cmd", "/removebc", False),
-    "admin_ask_addc": ("add_channel_cmd", "/addc", True),
+    "admin_ask_addc": ("add_channel_cmd", "/addc", False),
     "admin_ask_removec": ("remove_channel_cmd", "/removec", True),
     "admin_run_listc": ("list_channels_cmd", "/listc", False),
     "admin_run_lockf": ("lock_force_join_cmd", "/lockf", False),
@@ -6416,7 +6442,7 @@ def admin_menu_markup(cat=None):
     return markup
 
 
-def broadcast_copy(admin_chat_id, src):
+def broadcast_copy(admin_chat_id, src, markup=None):
     """Copy admin's message (text/media, premium emojis kept) to all users + groups."""
     targets = set()
     try:
@@ -6433,7 +6459,8 @@ def broadcast_copy(admin_chat_id, src):
     prog = bot.send_message(admin_chat_id, f"📢 Broadcast started...\n📊 Total: {total}")
     for i, cid in enumerate(targets, 1):
         try:
-            bot.copy_message(cid, src.chat.id, src.message_id, disable_notification=True)
+            bot.copy_message(cid, src.chat.id, src.message_id, disable_notification=True,
+                             reply_markup=markup)
             ok += 1
         except Exception:
             fail += 1
@@ -7874,6 +7901,47 @@ def callback_handler(call):
                 threading.Thread(target=broadcast_copy, args=(rm.chat.id, rm), daemon=True).start()
 
             bot.register_next_step_handler(prompt, _on_bc)
+            return
+
+        if call.data == "admin_bcbtn":
+            bot.answer_callback_query(call.id)
+            prompt = bot.send_message(
+                call.message.chat.id,
+                "<blockquote><b>📢 Broadcast Btn — Step 1/2</b>\n\nWo message bhejo jo sabko jana hai "
+                "(text / photo / video, premium emoji aur quote ke saath).</blockquote>",
+                parse_mode="HTML", reply_markup=admin_back_markup("broadcast"))
+
+            def _bcb_msg(rm):
+                if not is_admin(rm.from_user.id) or (rm.text or "").startswith("/"):
+                    bot.send_message(rm.chat.id, "❌ Cancelled.", reply_markup=admin_back_markup("broadcast"))
+                    return
+                p2 = bot.send_message(
+                    rm.chat.id,
+                    "<blockquote><b>📢 Broadcast Btn — Step 2/2</b>\n\nAb button bhejo is format mein:\n"
+                    "<code>Button Text | Link</code>\n\nExample: <code>Join Now | https://t.me/VillanCommunity</code>\n"
+                    "Color bhi de sakte ho: <code>Join Now | https://t.me/VillanCommunity | success</code>\n"
+                    "(primary = blue, success = green, danger = red)</blockquote>",
+                    parse_mode="HTML", reply_markup=admin_back_markup("broadcast"))
+
+                def _bcb_btn(bm, src=rm):
+                    if not is_admin(bm.from_user.id) or not bm.text or bm.text.startswith("/"):
+                        bot.send_message(bm.chat.id, "❌ Cancelled.", reply_markup=admin_back_markup("broadcast"))
+                        return
+                    args = [a.strip() for a in bm.text.split("|")]
+                    if len(args) < 2 or not args[0] or not args[1].startswith(("http://", "https://", "tg://")):
+                        bot.send_message(bm.chat.id, "❌ Galat format. Example: <code>Join Now | https://t.me/VillanCommunity</code>",
+                                         parse_mode="HTML", reply_markup=admin_back_markup("broadcast"))
+                        return
+                    style = args[2].lower() if len(args) > 2 else "primary"
+                    maker = {"success": create_success_button, "danger": create_danger_button}.get(style, create_primary_button)
+                    kw = {"icon_custom_emoji_id": args[3]} if len(args) > 3 and args[3] else {}
+                    mk = InlineKeyboardMarkup()
+                    mk.add(maker(args[0], url=args[1], **kw))
+                    threading.Thread(target=broadcast_copy, args=(bm.chat.id, src, mk), daemon=True).start()
+
+                bot.register_next_step_handler(p2, _bcb_btn)
+
+            bot.register_next_step_handler(prompt, _bcb_msg)
             return
 
         if call.data in ADMIN_ACTIONS:
