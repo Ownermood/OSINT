@@ -9723,6 +9723,9 @@ def _sc_markup(markup):
             txt = getattr(btn, "text", None)
             if not txt:
                 continue
+            _ic = getattr(btn, "icon_custom_emoji_id", None)
+            if _ic and _ic in _BAD_EMOJI_IDS:   # dead button icon → owner-pack emoji
+                btn.icon_custom_emoji_id = next((i for i in OWNER_EMOJI_IDS if i not in _BAD_EMOJI_IDS), None)
             m = re.match(r"\s*([^\w\s<>(){}\[\]/@#.,:;'\"!?&|+-]+)\s*", txt)
             if m and not getattr(btn, "icon_custom_emoji_id", None):
                 eid = premium_id_for(m.group(1).strip())
@@ -10000,6 +10003,28 @@ def _startup_banner():
     return uname, users
 
 
+def validate_all_emoji_ids():
+    """Startup: ask Telegram which of the bot's emoji IDs still exist.
+    Dead ones are swapped for a matching owner-pack emoji in every message from now on."""
+    try:
+        with open(os.path.abspath(__file__), encoding="utf-8") as f:
+            ids = sorted(set(re.findall(r'"(\d{19})"', f.read())) | set(OWNER_EMOJI_IDS))
+    except Exception as e:
+        print(f"[premium-emoji] scan failed: {e}")
+        return
+    alive = set()
+    try:
+        for k in range(0, len(ids), 200):
+            for st in bot.get_custom_emoji_stickers(ids[k:k + 200]):
+                alive.add(str(getattr(st, "custom_emoji_id", "")))
+    except Exception as e:
+        print(f"[premium-emoji] check failed: {e}")
+        return
+    dead = set(ids) - alive
+    _BAD_EMOJI_IDS.update(dead)
+    print(f"✅ Premium emojis checked: {len(alive)} ok, {len(dead)} dead (auto-replaced)")
+
+
 def _notify_owner_online(uname, users):
     try:
         send_with_premium(ADMIN_ID, premium_notice("Bot Online", [
@@ -10019,6 +10044,7 @@ if __name__ == "__main__":
         pass
 
     clear_pending_updates()
+    validate_all_emoji_ids()
     _u, _n = _startup_banner()
     _notify_owner_online(_u, _n)
 
