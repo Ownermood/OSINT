@@ -5496,6 +5496,11 @@ def start_cmd(message):
     )
 
 
+    _custom = get_setting("welcome_text")
+    if _custom:
+        msg = (_custom.replace("{name}", first_name).replace("{id}", str(user_id))
+                      .replace("{credits}", str(credits)))
+
     markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
         create_primary_button(" Help", callback_data="help", icon_custom_emoji_id="5298773244101281960"),
@@ -6545,6 +6550,7 @@ ADMIN_MENUS = {
         ("📊 Stats", "admin_stats", "Bot ke poore stats."),
         ("📈 Command Stats", "admin_run_commands", "Kaunsi command kitni chali."),
         ("⏱ Uptime", "admin_run_uptime", "Bot kab se chal raha hai."),
+        ("📝 Welcome Message", "admin_welcome", "/start ka message khud likho (premium emoji, bold, quote). <code>{name}</code> <code>{id}</code> <code>{credits}</code> apne aap bhar jayenge. <code>reset</code> = default."),
         ("🔒 Lock Bot", "admin_run_lock", "Bot sirf admin ke liye."),
         ("🔓 Unlock Bot", "admin_run_unlock", "Bot sabke liye."),
     ]),
@@ -8099,6 +8105,32 @@ def callback_handler(call):
                 threading.Thread(target=broadcast_copy, args=(rm.chat.id, rm), daemon=True).start()
 
             bot.register_next_step_handler(prompt, _on_bc)
+            return
+
+        if call.data == "admin_welcome":
+            bot.answer_callback_query(call.id)
+            prompt = bot.send_message(
+                call.message.chat.id,
+                "<blockquote><b>📝 Welcome Message</b>\n\nNaya /start message bhejo (premium emoji, bold, quote sab chalega).\n\n"
+                "Ye words apne aap user ke hisaab se badal jayenge:\n"
+                "<code>{name}</code> = user ka naam\n<code>{id}</code> = user ID\n<code>{credits}</code> = credits\n\n"
+                "Example: <i>Hey {name}! Welcome to Villan OSINT Bot. Your credits: {credits}</i>\n\n"
+                "<code>reset</code> bhejo to default wapas.</blockquote>",
+                parse_mode="HTML", reply_markup=admin_back_markup("bot"))
+
+            def _on_wm(rm):
+                if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
+                    bot.send_message(rm.chat.id, "❌ Cancelled.", reply_markup=admin_back_markup("bot"))
+                    return
+                if rm.text.strip().lower() == "reset":
+                    set_setting("welcome_text", None)
+                    bot.send_message(rm.chat.id, "✅ Default welcome message set.", reply_markup=admin_back_markup("bot"))
+                    return
+                html = getattr(rm, "html_text", None) or rm.text
+                set_setting("welcome_text", html)
+                bot.send_message(rm.chat.id, "✅ Welcome message saved. /start karke dekho.", reply_markup=admin_back_markup("bot"))
+
+            bot.register_next_step_handler(prompt, _on_wm)
             return
 
         if call.data == "admin_joinmsg":
