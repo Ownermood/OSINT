@@ -916,17 +916,12 @@ AUTO_DELETE_TIME = 120
 MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://USERNAME:PASSWORD@YOUR-CLUSTER.mongodb.net/?retryWrites=true&w=majority")   # ← APNI MONGODB URI DALO
 
 print("=" * 60)
-print("⏳ Connecting to MongoDB Atlas...")
+print("⏳ Connecting to database...")
 try:
     _mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=10000)
     # Force an actual connection check
     _mongo_client.admin.command("ping")
-    print("✅ MongoDB Connected Successfully!")
-    try:
-        print(f"   Host : {_mongo_client.address}")
-    except Exception:
-        print("   Host : (connected)")
-    print(f"   DB   : {os.getenv('MONGO_DB') or 'osint_bot_' + str(BOT_TOKEN).split(':')[0]}")
+    print("✅ Database connected")
 except Exception as _mongo_err:
     print(f"❌ MongoDB Connection FAILED: {_mongo_err}")
     print("   Bot cannot start without database. Fix the URI or network.")
@@ -9692,7 +9687,7 @@ def _startup_banner():
   ██║   ██║╚════██║██║██║╚██╗██║   ██║
   ╚██████╔╝███████║██║██║ ╚████║   ██║
    ╚═════╝ ╚══════╝╚═╝╚═╝  ╚═══╝   ╚═╝
-          V I L L A N   ·   B O T"""
+        O S I N T   V I L L A N"""
     try:
         me = bot.get_me()
         uname = f"@{me.username}"
@@ -9707,12 +9702,11 @@ def _startup_banner():
     print(line)
     print(f"  {G}●{X} {B}Bot      {X}: {C}{uname}{X}")
     print(f"  {G}●{X} {B}Owner    {X}: {C}{ADMIN_ID}{X}")
-    print(f"  {G}●{X} {B}Database {X}: {C}{MONGO_DB}{X}")
     print(f"  {G}●{X} {B}Users    {X}: {C}{users}{X}")
     print(f"  {G}●{X} {B}Channels {X}: {C}{len(PROMOTION_CHANNELS)}{X}   Force Join: {G + 'ON' if FORCE_JOIN_ENABLED else R + 'OFF'}{X}")
     print(f"  {G}●{X} {B}Started  {X}: {C}{datetime.now().strftime('%d %b %Y · %I:%M %p')}{X}")
     print(line)
-    print(f"  {Y}{B}⚡ OSINT VILLAN BOT IS LIVE — waiting for messages...{X}")
+    print(f"  {Y}{B}⚡ OSINT Villan is LIVE — waiting for messages...{X}")
     print(line)
     return uname, users
 
