@@ -8886,7 +8886,7 @@ bot.get_me = _cached_get_me
 # links, emails and {placeholders} — so commands and copyable values stay normal.
 _SC_SKIP = re.compile(
     r"(<code>.*?</code>|<pre>.*?</pre>|<pre .*?</pre>|<a [^>]*>.*?</a>|<tg-emoji[^>]*>.*?</tg-emoji>|<[^>]+>"
-    r"|`[^`]*`|https?://\S+|t\.me/\S+|tg://\S+|[\w.+-]+@[\w-]+\.[\w.]+|(?<![\w])[/@][A-Za-z0-9_]+|\{\w+\})",
+    r"|&#?\w+;|`[^`]*`|https?://\S+|t\.me/\S+|tg://\S+|[\w.+-]+@[\w-]+\.[\w.]+|(?<![\w])[/@][A-Za-z0-9_]+|\{\w+\})",
     re.S)
 
 
@@ -8901,6 +8901,10 @@ def _sc_markup(markup):
     rows = getattr(markup, "keyboard", None)
     if not rows or not isinstance(markup, InlineKeyboardMarkup):
         return markup
+    # Download JSON buttons removed everywhere
+    rows[:] = [r for r in (
+        [b for b in row if not str(getattr(b, "callback_data", "") or "").startswith(("dljson_", "num_dl_json"))]
+        for row in rows) if r]
     for row in rows:
         for btn in row:
             txt = getattr(btn, "text", None)
@@ -8937,9 +8941,18 @@ def _sc_wrap(method, fields):
 
     def wrapper(*args, **kw):
         args = list(args)
-        _apply(args, kw, lambda t: _fix_tg_emoji(sc_all(t)))
+        is_result = False
+        for f in ("text", "caption"):
+            v = kw.get(f) if f in kw else (args[params.index(f)] if f in params and params.index(f) < len(args) else None)
+            if isinstance(v, str) and _is_result_text(v):
+                is_result = True
+        conv = (lambda t: _fix_tg_emoji(sc_all(_copyable_values(t)))) if is_result else (lambda t: _fix_tg_emoji(sc_all(t)))
+        _apply(args, kw, conv)
         try:
-            return method(*args, **kw)
+            res = method(*args, **kw)
+            if is_result and method.__name__ in ("send_message", "send_photo", "send_document"):
+                _delete_later(res, RESULT_DELETE_TIME)
+            return res
         except Exception as e:
             err = str(e)
             if "Error code: 400" in err and "message is not modified" not in err \
@@ -8950,6 +8963,42 @@ def _sc_wrap(method, fields):
                 return method(*args, **kw)
             raise
     return wrapper
+
+
+RESULT_DELETE_TIME = 60   # search results auto-delete (PM + group)
+_RESULT_MARKERS = ("Lᴇꜰᴛ", "ʟᴇꜰᴛ", "Credits Left", "CREDITS LEFT", "Credits left",
+                   "Pᴏᴡᴇʀᴇᴅ Bʏ", "Powered By", "POWERED BY")
+_VAL_RE = re.compile(r"((?:</b>|[^\S\n])\s*:\s*)([^<\n:][^<\n]*?)(\s*)$", re.M)
+
+
+def _is_result_text(t):
+    return any(m in t for m in _RESULT_MARKERS)
+
+
+def _copyable_values(t):
+    """Result values → <code> (normal font, tap to copy)."""
+    def w(m):
+        val = m.group(2).strip()
+        if not val or val in ("—", "-", "N/A", "None") or any(x in m.string[max(0, m.start() - 40):m.start()] for x in ("Lᴇꜰᴛ", "ʟᴇꜰᴛ", "Left", "ᴛɪᴍᴇ", "Time", "Bʏ", "By")):
+            return m.group(0)
+        import html as _h
+        val = _h.escape(_h.unescape(_h.unescape(val)), quote=False)
+        return f"{m.group(1)}<code>{val}</code>{m.group(3)}"
+    return _VAL_RE.sub(w, t)
+
+
+def _delete_later(msg, secs):
+    if not msg or not getattr(msg, "chat", None):
+        return
+    cid, mid = msg.chat.id, msg.message_id
+
+    def _d():
+        time.sleep(secs)
+        try:
+            bot.delete_message(cid, mid)
+        except Exception:
+            pass
+    threading.Thread(target=_d, daemon=True).start()
 
 
 _TG_EMOJI_RE = re.compile(r'<tg-emoji emoji-id="[^"]*">(.*?)</tg-emoji>', re.S)
