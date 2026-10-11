@@ -903,7 +903,11 @@ API_ENDPOINTS = {
     "adhr": "/api/aadhar?key={key}&num={query}",
     "upi": "/api/upi?key={key}&upi={query}",
     "ifsc": "/api/ifsc?key={key}&ifsc={query}",
-    "family": "PASTE_API_HERE&id={query}"   # ← API OF FAMILY INFO,
+    "family": "PASTE_API_HERE&id={query}",   # ← API OF FAMILY INFO
+    # set these from Admin → API → API Manager (they use the placeholder until then)
+    "num2": "PASTE_API_HERE/api/num2?number={query}",
+    "insta": "PASTE_API_HERE/api/insta?username={query}",
+    "snap": "PASTE_API_HERE/api/snap?username={query}",
 }
 
 NEW_USER_CREDITS = 0  # new users get free searches instead (FREE_SEARCH_PM / FREE_SEARCH_GROUP)
@@ -8174,9 +8178,9 @@ def _api_map():
 def api_list_view(with_back=True):
     apis = _api_map()
     on = sum(1 for c in apis if check_api_status(c)[0])
-    text = (f"<blockquote>🔗 <b>API Manager</b></blockquote>\n"
+    text = (f"<blockquote>💻 <b>API Manager</b></blockquote>\n"
             f"<blockquote>✅ Working: <b>{on}</b>   ⛔ Off: <b>{len(apis) - on}</b>\n\n"
-            f"👉 Tap a command to view, change or toggle its URL.\n🔵 Blue = working   🔴 Red = off</blockquote>")
+            f"👉 Tap a command to view, change or toggle its URL.\n✅ Blue button = working · ⚠️ Red button = off</blockquote>")
     mk = InlineKeyboardMarkup(row_width=3)
     btns = []
     for c in apis:
@@ -8196,10 +8200,10 @@ def api_detail_view(cmd):
     import html as _html
     ep, custom = _api_map().get(cmd, ("—", False))
     working, smsg = check_api_status(cmd)
-    text = (f"<blockquote>🔗 <b>/{cmd}</b></blockquote>\n"
-            f"<blockquote>📍 Status: <b>{'🟢 Working' if working else '🔴 Off'}</b>"
+    text = (f"<blockquote>💻 <b>/{cmd}</b></blockquote>\n"
+            f"<blockquote>📍 Status: <b>{'✅ Working' if working else '⚠️ Off'}</b>"
             f"{(' — ' + _html.escape(smsg)) if (smsg and not working) else ''}\n"
-            f"🏷 Type: <b>{'Custom' if custom else 'Default'}</b>\n\n"
+            f"🏷 Type: <b>{'Custom' if custom else ('⚠️ Not set — tap Change URL' if str(ep).startswith(('PASTE', '/')) else 'Default')}</b>\n\n"
             f"🌐 URL:\n<code>{_html.escape(str(ep))}</code></blockquote>")
     mk = InlineKeyboardMarkup(row_width=2)
     mk.add(create_primary_button(" Change URL", callback_data=f"admin_apiurl_{cmd}",
