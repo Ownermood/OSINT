@@ -714,15 +714,21 @@ def edit_with_premium(chat_id, message_id, text, reply_markup=None, parse_mode='
             parse_mode=parse_mode
         )
     except Exception as e:
+        if "not modified" in str(e).lower():
+            return None
         logger.error(f"Premium emoji edit failed: {e}")
+        # retry keeping the formatting (only premium emoji removed) — never show raw HTML tags
         try:
             return bot.edit_message_text(
-                text=text,
+                text=_strip_tg_emoji(text),
                 chat_id=chat_id,
                 message_id=message_id,
-                reply_markup=reply_markup
+                reply_markup=reply_markup,
+                parse_mode=parse_mode
             )
-        except:
+        except Exception as e2:
+            if "not modified" not in str(e2).lower():
+                logger.error(f"edit failed: {e2}")
             return None
 
 
@@ -1813,12 +1819,24 @@ def _after_redeem(code, user_id, credits):
                     if "not modified" in str(e).lower():
                         sent = True
             if not sent:
-                try:
-                    m = send_with_premium(chat, text)
-                    if m:
-                        _col_codes.update_one({"code": code}, {"$set": {"log_mid": m.message_id}})
-                except Exception as e:
-                    print(f"redeem log: {e}")
+                m, err = None, None
+                for attempt in (lambda: send_with_premium(chat, text),
+                                lambda: bot.send_message(chat, _strip_tg_emoji(text), parse_mode="HTML"),
+                                lambda: bot.send_message(chat, _html_mod.unescape(re.sub(r"<[^>]+>", "", text)), parse_mode=None)):
+                    try:
+                        m = attempt()
+                        if m:
+                            break
+                    except Exception as e:
+                        err = e
+                        print(f"redeem log failed: {e}")
+                if m:
+                    _col_codes.update_one({"code": code}, {"$set": {"log_mid": m.message_id}})
+                else:   # tell the owner why the channel post failed
+                    try:
+                        bot.send_message(ADMIN_ID, f"⚠️ Claim log could not be posted to {chat}:\n{str(err)[:300]}", parse_mode=None)
+                    except Exception:
+                        pass
         if mx and used >= mx:
             for aid in {ADMIN_ID, doc.get("created_by")}:
                 if not aid:
@@ -1833,6 +1851,10 @@ def _after_redeem(code, user_id, credits):
                     pass
     except Exception as e:
         print(f"_after_redeem: {e}")
+        try:
+            bot.send_message(ADMIN_ID, f"⚠️ Redeem log error ({code}): {str(e)[:300]}", parse_mode=None)
+        except Exception:
+            pass
 
 
 def create_redeem_code(code, credits, max_uses, expiry_date, admin_id):
