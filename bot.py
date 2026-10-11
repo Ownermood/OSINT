@@ -6695,6 +6695,7 @@ ADMIN_MENUS = {
         ("Broadcast + Button", "admin_bcbtn", "Message, phir <code>Join Now | https://t.me/xyz</code>", "6136367002979146040"),
         ("Set BC Channel", "admin_setbc_info", "Send: <code>-1001234567890</code>", "6136446855011113722"),
         ("Remove BC Channel", "admin_run_removebc", "Auto broadcast band", "6138587213308369167"),
+        ("Delete Last Broadcast", "admin_delbc", "Aakhri broadcast sabke chat se delete", "6021413766669801212"),
     ]),
     "channels": ("Force Join", [
         ("Add Channel", "admin_ask_addc", "Chat ID, phir link — bot step by step puchega", "6136525109315245846"),
@@ -6849,6 +6850,52 @@ def admin_menu_markup(cat=None):
     return markup
 
 
+_col_broadcasts = _db["broadcasts"]
+
+
+def save_broadcast(sent, replace_last=False):
+    """Remember who got which message, so the broadcast can be deleted later."""
+    pairs = [[c, m] for c, m in sent if m]
+    try:
+        if replace_last:
+            last = _col_broadcasts.find_one(sort=[("ts", -1)])
+            if last and not last.get("deleted"):
+                _col_broadcasts.update_one({"_id": last["_id"]}, {"$set": {"sent": pairs}})
+                return
+        _col_broadcasts.insert_one({"ts": time.time(), "sent": pairs, "deleted": False})
+    except Exception as e:
+        print(f"save_broadcast error: {e}")
+
+
+def delete_last_broadcast(admin_chat_id):
+    doc = _col_broadcasts.find_one({"deleted": False}, sort=[("ts", -1)])
+    if not doc:
+        bot.send_message(admin_chat_id, "❌ Koi saved broadcast nahi mila.", reply_markup=admin_back_markup("broadcast"))
+        return
+    pairs = doc.get("sent", [])
+    prog = bot.send_message(admin_chat_id, f"🗑 Deleting broadcast... 0/{len(pairs)}")
+    ok = fail = 0
+    for i, (c, m) in enumerate(pairs, 1):
+        try:
+            bot.delete_message(c, m)
+            ok += 1
+        except Exception:
+            fail += 1
+        if i % 25 == 0:
+            try:
+                bot.edit_message_text(f"🗑 Deleting... {i}/{len(pairs)}", admin_chat_id, prog.message_id)
+            except Exception:
+                pass
+        time.sleep(0.04)
+    _col_broadcasts.update_one({"_id": doc["_id"]}, {"$set": {"deleted": True}})
+    try:
+        bot.edit_message_text(f"✅ Broadcast deleted!\n\n🗑 Deleted: {ok}\n❌ Failed: {fail}\n"
+                              f"(48 ghante se purane message Telegram delete nahi karne deta)",
+                              admin_chat_id, prog.message_id, reply_markup=admin_back_markup("broadcast"))
+    except Exception:
+        pass
+
+
 def broadcast_copy(admin_chat_id, src, markup=None):
     """Copy admin's message (text/media, premium emojis kept) to all users + groups."""
     targets = set()
@@ -6864,10 +6911,12 @@ def broadcast_copy(admin_chat_id, src, markup=None):
     total = len(targets)
     ok = fail = 0
     prog = bot.send_message(admin_chat_id, f"📢 Broadcast started...\n📊 Total: {total}")
+    sent = []
     for i, cid in enumerate(targets, 1):
         try:
-            bot.copy_message(cid, src.chat.id, src.message_id, disable_notification=True,
-                             reply_markup=markup)
+            r = bot.copy_message(cid, src.chat.id, src.message_id, disable_notification=True,
+                                 reply_markup=markup)
+            sent.append((cid, getattr(r, "message_id", None)))
             ok += 1
         except Exception:
             fail += 1
@@ -6877,6 +6926,7 @@ def broadcast_copy(admin_chat_id, src, markup=None):
             except Exception:
                 pass
         time.sleep(0.05)
+    save_broadcast(sent)
     try:
         bot.edit_message_text(f"✅ Broadcast done!\n\n📊 Total: {total}\n✅ Sent: {ok}\n❌ Failed: {fail}",
                               admin_chat_id, prog.message_id, reply_markup=admin_back_markup("broadcast"))
@@ -7279,18 +7329,22 @@ def broadcast_cmd(message):
         f"📢 Broadcast started...\n\n📊 Total: {total}\n⏳ Sending..."
     )
 
+    _bc_sent = []
     for idx, chat_id in enumerate(all_chats, 1):
         try:
             if use_forward:
                 # forward preserves original sender / channel header
-                bot.forward_message(
+                _r = bot.forward_message(
                     chat_id=chat_id,
                     from_chat_id=forward_from_chat,
                     message_id=forward_msg_id,
                     disable_notification=True,
                 )
             else:
-                send_with_premium(chat_id, broadcast_msg, disable_notification=True)
+                _r = send_with_premium(chat_id, broadcast_msg, disable_notification=True)
+            _bc_sent.append((chat_id, getattr(_r, "message_id", None)))
+            if idx % 50 == 0:
+                save_broadcast(_bc_sent, replace_last=idx > 50)
             success_count += 1
         except Exception:
             fail_count += 1
@@ -7302,6 +7356,7 @@ def broadcast_cmd(message):
             except:
                 pass
         time.sleep(0.1)
+    save_broadcast(_bc_sent, replace_last=len(all_chats) > 50)
 
 @bot.message_handler(commands=['broadcastbtn'])
 def broadcast_btn_cmd(message):
@@ -8390,6 +8445,23 @@ def callback_handler(call):
             bot.register_next_step_handler(prompt, _on_wm)
             return
 
+        if call.data == "admin_delbc":
+            bot.answer_callback_query(call.id)
+            mk = InlineKeyboardMarkup(row_width=2)
+            mk.add(create_danger_button(" Yes, Delete", callback_data="admin_delbc_yes",
+                                        icon_custom_emoji_id="6021413766669801212"),
+                   create_primary_button(" Back", callback_data="admin_cat_broadcast",
+                                         icon_custom_emoji_id="6138930810692049889"))
+            edit_with_premium(call.message.chat.id, call.message.message_id,
+                              "<blockquote>🗑 <b>Delete Last Broadcast?</b>\n\nAakhri broadcast sab users "
+                              "aur groups ke chat se hata diya jayega.</blockquote>", reply_markup=mk)
+            return
+
+        if call.data == "admin_delbc_yes":
+            bot.answer_callback_query(call.id, "Deleting...")
+            threading.Thread(target=delete_last_broadcast, args=(call.message.chat.id,), daemon=True).start()
+            return
+
         if call.data == "admin_joinmsg":
             bot.answer_callback_query(call.id)
             prompt = bot.send_message(
@@ -8606,19 +8678,22 @@ def _do_channel_broadcast(origin_chat_id: int, origin_msg_id: int):
     total   = len(all_targets)
     logger.info(f"[ChannelBroadcast] forwarding msg {origin_msg_id} from {origin_chat_id} → {total} targets")
 
+    _bc_sent = []
     for target in all_targets:
         try:
-            bot.forward_message(
+            _r = bot.forward_message(
                 chat_id=target,
                 from_chat_id=origin_chat_id,
                 message_id=origin_msg_id,
                 disable_notification=True,
             )
+            _bc_sent.append((target, getattr(_r, "message_id", None)))
             success += 1
         except Exception as e:
             fail += 1
         time.sleep(0.05)   # ~20 msg/s — stays under Telegram limits
 
+    save_broadcast(_bc_sent)
     logger.info(f"[ChannelBroadcast] done — success={success} fail={fail}")
 
     # notify admin
@@ -8952,6 +9027,10 @@ def _sc_wrap(method, fields):
             res = method(*args, **kw)
             if is_result and method.__name__ in ("send_message", "send_photo", "send_document"):
                 _delete_later(res, RESULT_DELETE_TIME)
+                _RESULT_TL.t = time.time()
+            elif method.__name__ in ("send_photo", "send_video", "send_animation", "send_document") \
+                    and time.time() - getattr(_RESULT_TL, "t", 0) < 20:
+                _delete_later(res, RESULT_DELETE_TIME)   # media sent with a search result
             return res
         except Exception as e:
             err = str(e)
@@ -8966,6 +9045,7 @@ def _sc_wrap(method, fields):
 
 
 RESULT_DELETE_TIME = 60   # search results auto-delete (PM + group)
+_RESULT_TL = threading.local()
 _RESULT_MARKERS = ("Lᴇꜰᴛ", "ʟᴇꜰᴛ", "Credits Left", "CREDITS LEFT", "Credits left",
                    "Pᴏᴡᴇʀᴇᴅ Bʏ", "Powered By", "POWERED BY")
 _VAL_RE = re.compile(r"((?:</b>|[^\S\n])\s*:\s*)([^<\n:][^<\n]*?)(\s*)$", re.M)
