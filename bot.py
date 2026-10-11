@@ -1876,6 +1876,7 @@ def force_join_message(chat_id, user_id):
         return None
 
 
+@bot.message_handler(commands=['renamec'])
 def rename_channel_cmd(message):
     """/renamec <number> <name>  — number from List Channels order."""
     if not is_admin(message.from_user.id):
@@ -6922,6 +6923,14 @@ def add_admin_from_text(text_plain, text_html):
     return True, f"✅ {label} · <code>{tid}</code> ab admin hai."
 
 
+@bot.message_handler(commands=['admins'])
+def admins_cmd(message):
+    if not is_admin(message.from_user.id):
+        return
+    t, mk = admins_view(message.from_user.id)
+    send_with_premium(message.chat.id, t, reply_markup=mk)
+
+
 @bot.message_handler(commands=['addadmin'])
 def addadmin_cmd(message):
     if message.from_user.id != ADMIN_ID:
@@ -6955,13 +6964,35 @@ def admin_main_text():
     )
 
 
+# button → same thing as a /command (shown in every section guide)
+ADMIN_CMD_HINT = {
+    "admin_admins": "/admins", "admin_addadm": "/addadmin Name user_id", "admin_rmlist": "/demote user_id",
+    "admin_users": "/users", "admin_ask_searchuser": "/searchuser user_id", "admin_block": "/block user_id",
+    "admin_unblock": "/unblock user_id",
+    "admin_addcredits": "/add user_id amount", "admin_removecredits": "/removecredit user_id amount",
+    "admin_ask_gen": "/gen credits users days", "admin_run_allcodes": "/allcodes", "admin_ask_deletecode": "/deletecode CODE",
+    "admin_broadcast_info": "/broadcast text  (ya message pe reply)", "admin_bcbtn": "/broadcastbtn Text | link  (message pe reply)",
+    "admin_setbc_info": "/setbc channel_id", "admin_run_removebc": "/removebc",
+    "admin_run_listc": "/listc", "admin_ask_addc": "/addc", "admin_ask_removec": "/removec link",
+    "admin_ask_renamec": "/renamec number Name", "admin_fjtoggle": "/unlockf = ON · /lockf = OFF",
+    "admin_run_api": "/api", "admin_ask_apic": "/apic num url", "admin_ask_apistatus": "/apistatus num off message",
+    "admin_run_addvideo": "/addvideo", "admin_run_addphoto": "/addphoto", "admin_run_done": "/done",
+    "admin_ask_setmode": "/setmode video", "admin_run_listvideos": "/listvideos", "admin_run_listphotos": "/listphotos",
+    "admin_run_delvideo": "/delvideo", "admin_run_delphoto": "/delphoto",
+    "admin_stats": "/stats", "admin_run_commands": "/commands", "admin_run_uptime": "/uptime",
+    "admin_run_lock": "/lock", "admin_run_unlock": "/unlock",
+}
+
+
 def admin_cat_text(cat):
     title, items = ADMIN_MENUS[cat]
     lines = [f"<blockquote>{te(ADMIN_CAT_ICONS[cat], '⭐')} <b>{sc(title)}</b></blockquote>", "<blockquote>"]
     for label, d, desc, ic in items:
         if d == "admin_fjtoggle":
             label = "Force Join: ON" if FORCE_JOIN_ENABLED else "Force Join: OFF"
-        lines.append(f"{te(ic, '⭐')} <b>{sc(label)}</b>\n      {desc}\n")
+        hint = ADMIN_CMD_HINT.get(d)
+        hint = f"\n      📌 {hint}" if hint else ""
+        lines.append(f"{te(ic, '⭐')} <b>{sc(label)}</b>\n      {desc}{hint}\n")
     lines.append("</blockquote>")
     return "\n".join(lines)
 
