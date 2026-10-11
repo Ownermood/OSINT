@@ -1796,7 +1796,7 @@ def _after_redeem(code, user_id, credits):
                         f"<blockquote>🔑 Code : <code>{_mask_code(code)}</code>\n"
                         f"💰 Credits : <b>+{credits}</b> each\n"
                         f"👥 Claimed : <b>{used}/{mx}</b> ✅</blockquote>\n"
-                        f"<blockquote expandable>🏆 <b>Winners</b>\n{lst}</blockquote>\n"
+                        f"<blockquote>🏆 <b>Winners</b>\n{lst}</blockquote>\n"
                         f"----------\n🌸 Thank you ➜ @{bot.get_me().username}")
             else:
                 text = (f"🎟 <b>CODE REDEEMED</b>\n"
