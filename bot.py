@@ -8796,17 +8796,49 @@ def _sc_wrap(method, fields):
     except Exception:
         params = []
 
-    def wrapper(*args, **kw):
-        args = list(args)
+    def _apply(args, kw, fn_text):
         for f in fields:
-            conv = _sc_markup if f == "reply_markup" else sc_all
+            conv = _sc_markup if f == "reply_markup" else fn_text
             if f in kw:
                 kw[f] = conv(kw[f])
             elif f in params and params.index(f) < len(args):
                 i = params.index(f)
                 args[i] = conv(args[i])
-        return method(*args, **kw)
+
+    def wrapper(*args, **kw):
+        args = list(args)
+        _apply(args, kw, lambda t: _fix_tg_emoji(sc_all(t)))
+        try:
+            return method(*args, **kw)
+        except Exception as e:
+            err = str(e)
+            if "ENTITY_TEXT_INVALID" in err or "DOCUMENT_INVALID" in err or "can't parse entities" in err:
+                # never lose a message because of a bad premium emoji tag
+                print(f"[premium-emoji fallback] {err[:120]}")
+                _apply(args, kw, _strip_tg_emoji)
+                return method(*args, **kw)
+            raise
     return wrapper
+
+
+_TG_EMOJI_RE = re.compile(r'<tg-emoji emoji-id="[^"]*">(.*?)</tg-emoji>', re.S)
+
+
+def _fix_tg_emoji(text):
+    """Unwrap premium tags whose inner text is not a single emoji (Telegram rejects those)."""
+    if not text or not isinstance(text, str) or "<tg-emoji" not in text:
+        return text
+    def chk(m):
+        inner = m.group(1)
+        bad = (not inner.strip()) or any(c.isalnum() or c in "<>" for c in inner) or len(inner) > 12
+        return inner if bad else m.group(0)
+    return _TG_EMOJI_RE.sub(chk, text)
+
+
+def _strip_tg_emoji(text):
+    if not text or not isinstance(text, str):
+        return text
+    return _TG_EMOJI_RE.sub(lambda m: m.group(1), text)
 
 
 for _m, _f in (("send_message", ("text", "reply_markup")),
