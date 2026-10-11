@@ -290,6 +290,25 @@ _EM = {
 }
 
 
+_BMP_EMOJI = set("☀☁☂☃☄★☎☑☔☕☘☝☠☢☣☦☪☮☯☸☹☺♀♂♈♉♊♋♌♍♎♏♐♑♒♓♟♠♣♥♦♨♻♾♿⚒⚓⚔⚕⚖⚗⚙⚛⚜⚠⚡⚧⚪⚫⚰⚱⚽⚾⛄⛅⛈⛎⛏⛑⛓⛔⛩⛪⛰⛱⛲⛳⛴⛵⛷⛸⛹⛺⛽"
+                 "✂✅✈✉✊✋✌✍✏✒✔✖✝✡✨✳✴❄❇❌❎❓❔❕❗❣❤➕➖➗➡➰➿⤴⤵⬅⬆⬇⬛⬜⭐⭕〰〽㊗㊙"
+                 "⌚⌛⌨⏏⏩⏪⏫⏬⏭⏮⏯⏰⏱⏲⏳⏸⏹⏺Ⓜ‼⁉™ℹ↔↕↖↗↘↙↩↪▪▫▶◀◻◼◽◾©®")
+
+
+def is_real_emoji(em):
+    """True only for real emoji (so Telegram accepts it inside <tg-emoji>)."""
+    import unicodedata
+    base = em.replace("\ufe0f", "").replace("\u200d", "")
+    if not base:
+        return False
+    if any(unicodedata.category(c) in ("Mn", "Me") and c != "\u20e3" for c in base):
+        return False
+    c = base[0]
+    if ord(c) >= 0x1F000:
+        return True
+    return c in _BMP_EMOJI
+
+
 def premium_id_for(emoji_text):
     key = emoji_text.replace("\ufe0f", "")
     return _EM.get(key) or _EM.get(key[:1])
@@ -561,6 +580,9 @@ def replace_with_premium_emojis(text):
         out = []
         for em in re.findall(r'.\ufe0f?(?:\u200d.\ufe0f?)*', match.group(0)):
             if em in ("\u200d", "\ufe0f"):
+                continue
+            if not is_real_emoji(em):
+                out.append(em)       # symbols like ⏤ in user names: leave as plain text
                 continue
             eid = premium_id_for(em) or get_random_premium_emoji_id()
             out.append('<tg-emoji emoji-id="' + eid + '">' + em + '</tg-emoji>')
@@ -8831,7 +8853,8 @@ def _fix_tg_emoji(text):
         return text
     def chk(m):
         inner = m.group(1)
-        bad = (not inner.strip()) or any(c.isalnum() or c in "<>" for c in inner) or len(inner) > 12
+        bad = (not inner.strip()) or any(c.isalnum() or c in "<>" for c in inner) or len(inner) > 12 \
+            or not is_real_emoji(inner)
         return inner if bad else m.group(0)
     return _TG_EMOJI_RE.sub(chk, text)
 
