@@ -9683,20 +9683,61 @@ FORCE_JOIN_ENABLED = bool(get_setting("force_join", True))
 for _fname in [n for n in list(globals()) if n.startswith("call_") and n.endswith("_api")]:
     globals()[_fname] = _charge_on_success(globals()[_fname])
 
+def _startup_banner():
+    R, G, C, Y, B, D, X = "\033[91m", "\033[92m", "\033[96m", "\033[93m", "\033[1m", "\033[2m", "\033[0m"
+    art = r"""
+   ██████╗ ███████╗██╗███╗   ██╗████████╗
+  ██╔═══██╗██╔════╝██║████╗  ██║╚══██╔══╝
+  ██║   ██║███████╗██║██╔██╗ ██║   ██║
+  ██║   ██║╚════██║██║██║╚██╗██║   ██║
+  ╚██████╔╝███████║██║██║ ╚████║   ██║
+   ╚═════╝ ╚══════╝╚═╝╚═╝  ╚═══╝   ╚═╝
+          V I L L A N   ·   B O T"""
+    try:
+        me = bot.get_me()
+        uname = f"@{me.username}"
+    except Exception:
+        uname = "(token error)"
+    try:
+        users = _col_users.count_documents({})
+    except Exception:
+        users = "?"
+    line = f"{D}{'━' * 46}{X}"
+    print(R + B + art + X)
+    print(line)
+    print(f"  {G}●{X} {B}Bot      {X}: {C}{uname}{X}")
+    print(f"  {G}●{X} {B}Owner    {X}: {C}{ADMIN_ID}{X}")
+    print(f"  {G}●{X} {B}Database {X}: {C}{MONGO_DB}{X}")
+    print(f"  {G}●{X} {B}Users    {X}: {C}{users}{X}")
+    print(f"  {G}●{X} {B}Channels {X}: {C}{len(PROMOTION_CHANNELS)}{X}   Force Join: {G + 'ON' if FORCE_JOIN_ENABLED else R + 'OFF'}{X}")
+    print(f"  {G}●{X} {B}Started  {X}: {C}{datetime.now().strftime('%d %b %Y · %I:%M %p')}{X}")
+    print(line)
+    print(f"  {Y}{B}⚡ OSINT VILLAN BOT IS LIVE — waiting for messages...{X}")
+    print(line)
+    return uname, users
+
+
+def _notify_owner_online(uname, users):
+    try:
+        send_with_premium(ADMIN_ID, premium_notice("Bot Online", [
+            f"{te('6136326046171011765', '⚡')} Bot : <b>{uname}</b>",
+            f"{te('5424611538151437896', '👥')} Users : <b>{users}</b>",
+            f"{te('6136367002979146040', '🔗')} Channels : <b>{len(PROMOTION_CHANNELS)}</b> · Force Join <b>{'ON' if FORCE_JOIN_ENABLED else 'OFF'}</b>",
+            f"{te('6138579366403119002', '⏳')} Started : <b>{datetime.now().strftime('%d %b %Y · %I:%M %p')}</b>",
+        ], "All systems running · /admin to manage"))
+    except Exception as e:
+        print(f"[startup] owner DM failed: {e}")
+
+
 if __name__ == "__main__":
-    print("=" * 60)
-    print("✅ OSINT BOT STARTING WITH ALL FIXES...")
-    print("=" * 60)
-
-    # Turso removed — MongoDB only
-    print("✅ Contact store: MongoDB only (Turso removed)")
-
     try:
         bot.remove_webhook()
     except:
         pass
 
     clear_pending_updates()
+    _u, _n = _startup_banner()
+    _notify_owner_online(_u, _n)
 
     def _protection_expiry_loop():
         while True:
