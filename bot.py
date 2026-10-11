@@ -1928,7 +1928,7 @@ def send_result_with_json(chat_id, result_text, json_file, message_id=None, edit
 
     markup = InlineKeyboardMarkup(row_width=2)
     markup.add(create_primary_button("Download JSON", callback_data=f"dljson_{file_id}"))
-    markup.add(create_default_button("Back", callback_data="back_to_result"))
+    markup.add(create_danger_button(" Back", callback_data="back_to_result", icon_custom_emoji_id="6138930810692049889"))
 
     try:
         if message_id and edit:
@@ -2646,7 +2646,7 @@ def send_multi_result(chat_id, message_parts, wait_message=None, json_file=None)
             JSON_FILES[file_id] = json_file
             markup = InlineKeyboardMarkup(row_width=2)
             markup.add(create_primary_button("📥 Download JSON", callback_data=f"dljson_{file_id}"))
-            markup.add(create_default_button("Back", callback_data="back_to_result"))
+            markup.add(create_danger_button(" Back", callback_data="back_to_result", icon_custom_emoji_id="6138930810692049889"))
         try:
             msg = send_with_premium(chat_id, part, reply_markup=markup)
             if msg:
@@ -3934,7 +3934,7 @@ def _send_vech_page(chat_id, user_id, page_idx):
         JSON_FILES[file_id] = json_file
         markup.add(InlineKeyboardButton("📥 Download JSON", callback_data=f"dljson_{file_id}"))
 
-    markup.add(create_default_button("🔙 Back", callback_data="back_to_result", icon_custom_emoji_id="5307517685846785869"))
+    markup.add(create_danger_button(" Back", callback_data="back_to_result", icon_custom_emoji_id="6138930810692049889"))
 
     sent = send_with_premium(chat_id, text, reply_markup=markup)
     if sent:
@@ -6028,7 +6028,7 @@ def vech_cmd(message):
             file_id = hashlib.md5(json_file.encode()).hexdigest()[:16]
             JSON_FILES[file_id] = json_file
             markup.add(InlineKeyboardButton("📥 Download JSON", callback_data=f"dljson_{file_id}"))
-        markup.add(create_default_button("🔙 Back", callback_data="back_to_result", icon_custom_emoji_id="5307517685846785869"))
+        markup.add(create_danger_button(" Back", callback_data="back_to_result", icon_custom_emoji_id="6138930810692049889"))
         try:
             bot.delete_message(chat_id, wait.message_id)
         except:
@@ -6105,7 +6105,7 @@ def vechrc_cmd(message):
             file_id = hashlib.md5(json_file.encode()).hexdigest()[:16]
             JSON_FILES[file_id] = json_file
             markup.add(InlineKeyboardButton("📥 Download JSON", callback_data=f"dljson_{file_id}"))
-        markup.add(create_default_button("🔙 Back", callback_data="back_to_result", icon_custom_emoji_id="5307517685846785869"))
+        markup.add(create_danger_button(" Back", callback_data="back_to_result", icon_custom_emoji_id="6138930810692049889"))
         try:
             bot.delete_message(chat_id, wait.message_id)
         except:
@@ -6321,9 +6321,9 @@ def snap_cmd(message):
         markup.add(create_primary_button("📥 Download JSON",
             callback_data=f"dljson_{file_id}",
             icon_custom_emoji_id="5465637267626271756"))
-    markup.add(create_default_button("🔙 Back",
+    markup.add(create_danger_button(" Back",
         callback_data="back_to_result",
-        icon_custom_emoji_id="5307517685846785869"))
+        icon_custom_emoji_id="6138930810692049889"))
 
     sent_msg = None
     if pic_url and pic_url.startswith("http"):
@@ -6573,7 +6573,7 @@ def insta_cmd(message):
         file_id = hashlib.md5(json_file.encode()).hexdigest()[:16]
         JSON_FILES[file_id] = json_file
         markup.add(create_primary_button("📥 Download JSON", callback_data="dljson_" + file_id, icon_custom_emoji_id="5465637267626271756"))
-    markup.add(create_default_button("🔙 Back", callback_data="back_to_result", icon_custom_emoji_id="5307517685846785869"))
+    markup.add(create_danger_button(" Back", callback_data="back_to_result", icon_custom_emoji_id="6138930810692049889"))
 
     sent_msg = None
     if pic_url and pic_url.startswith("http"):
@@ -6718,7 +6718,7 @@ def admin_back_markup(cat=None):
     markup = InlineKeyboardMarkup(row_width=2)
     btns = []
     if cat:
-        btns.append(create_default_button(" " + sc("Back"), callback_data=f"admin_cat_{cat}",
+        btns.append(create_danger_button(" " + sc("Back"), callback_data=f"admin_cat_{cat}",
                                           icon_custom_emoji_id=ADMIN_BACK_ICON))
     btns.append(create_danger_button(" " + sc("Admin Panel"), callback_data="admin_cat_main",
                                      icon_custom_emoji_id=ADMIN_HOME_ICON))
@@ -6768,6 +6768,9 @@ def admin_menu_markup(cat=None):
     markup.add(*btns)
     if cat is not None:
         markup.add(create_danger_button(" " + sc("Back"), callback_data="admin_cat_main",
+                                        icon_custom_emoji_id=ADMIN_BACK_ICON))
+    else:
+        markup.add(create_danger_button(" " + sc("Back"), callback_data="back_start",
                                         icon_custom_emoji_id=ADMIN_BACK_ICON))
     return markup
 
@@ -7828,7 +7831,7 @@ def vech_page_callback(call):
             JSON_FILES[file_id] = json_file
             markup.add(InlineKeyboardButton("📥 Download JSON", callback_data=f"dljson_{file_id}"))
 
-        markup.add(create_default_button("🔙 Back", callback_data="back_to_result", icon_custom_emoji_id="5307517685846785869"))
+        markup.add(create_danger_button(" Back", callback_data="back_to_result", icon_custom_emoji_id="6138930810692049889"))
 
         try:
             edit_with_premium(chat_id, msg_id, text, reply_markup=markup)
@@ -8144,8 +8147,8 @@ def callback_handler(call):
             fm.date = int(datetime.now().timestamp())
             fm.text = "/start" if call.data == "back_start" else "/" + call.data
             back = InlineKeyboardMarkup()
-            back.add(create_default_button(" Back", callback_data="back_start",
-                                           icon_custom_emoji_id="5307517685846785869"))
+            back.add(create_danger_button(" Back", callback_data="back_start",
+                                           icon_custom_emoji_id="6138930810692049889"))
             bot.answer_callback_query(call.id)
             _EDIT_TL.target = (call.message.chat.id, call.message.message_id,
                                None if call.data == "back_start" else back)
@@ -8168,8 +8171,8 @@ def callback_handler(call):
         if call.data == "redeem":
             bot.answer_callback_query(call.id)
             back = InlineKeyboardMarkup()
-            back.add(create_default_button(" Back", callback_data="back_start",
-                                           icon_custom_emoji_id="5307517685846785869"))
+            back.add(create_danger_button(" Back", callback_data="back_start",
+                                           icon_custom_emoji_id="6138930810692049889"))
             try:
                 edit_with_premium(call.message.chat.id, call.message.message_id,
                                   "<blockquote><b>🎟 REDEEM CODE</b>\n\nApna redeem code bhejo 👇\n"
