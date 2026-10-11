@@ -926,14 +926,28 @@ try:
         print(f"   Host : {_mongo_client.address}")
     except Exception:
         print("   Host : (connected)")
-    print(f"   DB   : osint_bot")
+    print(f"   DB   : {os.getenv('MONGO_DB', 'osint_bot')}")
 except Exception as _mongo_err:
     print(f"❌ MongoDB Connection FAILED: {_mongo_err}")
     print("   Bot cannot start without database. Fix the URI or network.")
     sys.exit(1)
 print("=" * 60)
 
-_db = _mongo_client["osint_bot"]
+MONGO_DB = os.getenv("MONGO_DB", "osint_bot")
+_db = _mongo_client[MONGO_DB]
+
+# New database (e.g. new bot): copy settings from the old one once — users/credits start fresh.
+try:
+    if MONGO_DB != "osint_bot" and not _db["bot_settings"].find_one({"_id": "_copied_from_old"}):
+        _old = _mongo_client["osint_bot"]
+        for _c in ("api_config", "force_join_channels", "bot_settings"):
+            _docs = list(_old[_c].find({}))
+            if _docs and not _db[_c].find_one({}):
+                _db[_c].insert_many(_docs)
+        _db["bot_settings"].update_one({"_id": "_copied_from_old"}, {"$set": {"value": True}}, upsert=True)
+        print("✅ Settings copied from old database (API URLs, channels, messages)")
+except Exception as _cp_err:
+    print(f"Settings copy skipped: {_cp_err}")
 
 # Collections
 _col_users       = _db["users"]
