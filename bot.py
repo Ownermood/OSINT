@@ -5660,6 +5660,18 @@ def h_contact_verify(msg):
     except Exception as exc:
         print(f"[CONTACT_VERIFY] {exc}")
 
+def get_start_pic():
+    return get_setting("start_pic", "")
+
+
+def _with_banner(text):
+    """Prefix an invisible anchor linking the start image, so Telegram shows it above the text."""
+    pic = get_start_pic()
+    if not pic:
+        return text, False
+    return f'<a href="{pic}">\u200b</a>' + text, True
+
+
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     if not is_recent_command(message):
@@ -5810,7 +5822,13 @@ def start_cmd(message):
     if message.chat.type != "private":
         markup = None  # groups: commands only, buttons only in PM
     try:
-        sent = send_with_premium(chat_id, msg, parse_mode='HTML', reply_markup=markup)
+        banner, has_pic = _with_banner(msg)
+        if has_pic:
+            lpo = types.LinkPreviewOptions(url=get_start_pic(), prefer_large_media=True, show_above_text=True)
+            m2 = replace_with_premium_emojis(_sanitise_html(banner))
+            sent = bot.send_message(chat_id, m2, parse_mode='HTML', reply_markup=markup, link_preview_options=lpo)
+        else:
+            sent = send_with_premium(chat_id, msg, parse_mode='HTML', reply_markup=markup)
         schedule_deletion(sent.message_id, chat_id)
     except Exception as e:
         print(f"Error in start command: {e}")
@@ -6812,6 +6830,7 @@ ADMIN_MENUS = {
         ("Add Admin", "admin_addadm", "Send: <code>Rahul 🔥 123456789</code> (name first, then ID)", "6136525109315245846"),
         ("Remove Admin", "admin_rmlist", "Tap in the list to remove", "6138614761228606277"),
         ("Protected Numbers", "admin_protect", "These numbers stay hidden from every search", "6019328362479097179"),
+        ("Start Image", "admin_startpic", "Set the banner image shown on /start", "6021321527952153006"),
         ("User Stats", "admin_users", "Total, admin and blocked users", "6136389654636665179"),
         ("Search User", "admin_ask_searchuser", "Send: <code>123456789</code> or <code>@username</code>", "5424700761802023186"),
         ("Block User", "admin_block", "Send: <code>123456789</code>", "6138614761228606277"),
@@ -7102,6 +7121,28 @@ def _parse_protect(raw):
     return uid, num, days
 
 
+@bot.message_handler(commands=['setpic'])
+def setpic_cmd(message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        cur = get_start_pic()
+        send_with_premium(message.chat.id, (f"🖼 Current start image:\n<code>{cur}</code>" if cur else "🖼 No start image set.") +
+                          "\n\nUse: <code>/setpic https://...jpg</code>  or  <code>/setpic off</code>")
+        return
+    val = parts[1].strip()
+    if val.lower() in ("off", "none", "remove", "clear"):
+        set_setting("start_pic", None)
+        send_with_premium(message.chat.id, "✅ Start image removed.")
+        return
+    if not val.startswith(("http://", "https://")):
+        send_with_premium(message.chat.id, "❌ URL must start with http:// or https://.")
+        return
+    set_setting("start_pic", val)
+    send_with_premium(message.chat.id, "✅ Start image saved! Send /start to see it.")
+
+
 @bot.message_handler(commands=['protect'])
 def protect_cmd(message):
     if not is_admin(message.from_user.id):
@@ -7197,7 +7238,8 @@ def admin_main_text():
 # button → same thing as a /command (shown in every section guide)
 ADMIN_CMD_HINT = {
     "admin_admins": "/admins", "admin_addadm": "/addadmin Name user_id", "admin_rmlist": "/demote user_id",
-    "admin_users": "/users", "admin_protect": "/protect number · /unprotect number", "admin_ask_searchuser": "/searchuser user_id", "admin_block": "/block user_id",
+    "admin_users": "/users", "admin_protect": "/protect number · /unprotect number",
+    "admin_startpic": "/setpic url · /setpic off", "admin_ask_searchuser": "/searchuser user_id", "admin_block": "/block user_id",
     "admin_unblock": "/unblock user_id",
     "admin_addcredits": "/add user_id amount", "admin_removecredits": "/removecredit user_id amount",
     "admin_ask_gen": "/gen credits users days", "admin_run_allcodes": "/allcodes", "admin_ask_deletecode": "/deletecode CODE", "admin_pricing": "/setprice weekly PRICE",
@@ -8987,6 +9029,46 @@ def callback_handler(call):
             bot.answer_callback_query(call.id)
             t, mk = pricing_view()
             edit_with_premium(cid, mid, t, reply_markup=mk)
+            return
+
+        if call.data in ("admin_startpic", "admin_startpic_clear"):
+            cid, mid = call.message.chat.id, call.message.message_id
+            if call.data == "admin_startpic_clear":
+                set_setting("start_pic", None)
+                bot.answer_callback_query(call.id, "✅ Start image removed")
+            else:
+                bot.answer_callback_query(call.id)
+            cur = get_start_pic()
+            mk = InlineKeyboardMarkup(row_width=1)
+            mk.add(create_success_button(" Set / Change Image", callback_data="admin_startpic_set", icon_custom_emoji_id="6021321527952153006"))
+            if cur:
+                mk.add(create_danger_button(" Remove Image", callback_data="admin_startpic_clear", icon_custom_emoji_id="6021413766669801212"))
+            mk.add(create_danger_button(" Back", callback_data="admin_cat_users", icon_custom_emoji_id=ADMIN_BACK_ICON))
+            txt = ("🖼 <b>START IMAGE</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>"
+                   + (f"Current:\n<code>{cur}</code>" if cur else "No image set. The /start message shows plain text.") + "</blockquote>\n"
+                   "📌 <i>Send a public image URL (jpg/png). It shows as a banner above /start.</i>")
+            edit_with_premium(cid, mid, txt, reply_markup=mk)
+            return
+
+        if call.data == "admin_startpic_set":
+            cid, mid = call.message.chat.id, call.message.message_id
+            bot.answer_callback_query(call.id)
+            back = InlineKeyboardMarkup()
+            back.add(create_primary_button(" Cancel", callback_data="admin_startpic", icon_custom_emoji_id=ADMIN_BACK_ICON))
+            edit_with_premium(cid, mid, "🖼 <b>Set Start Image</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+                              "<blockquote>Send a public image URL.\n\nExample:\n<code>https://files.catbox.moe/jd50nh.jpg</code></blockquote>", reply_markup=back)
+
+            def _on_pic(rm):
+                if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
+                    return
+                url = rm.text.strip()
+                if not url.startswith(("http://", "https://")):
+                    bot.send_message(rm.chat.id, "❌ URL must start with http:// or https://.")
+                    return
+                set_setting("start_pic", url)
+                bot.send_message(rm.chat.id, "✅ Start image saved! Send /start to see it.")
+
+            bot.register_next_step_handler_by_chat_id(cid, _on_pic)
             return
 
         if call.data in ("admin_protect", "admin_protadd") or call.data.startswith("admin_protrm_"):
