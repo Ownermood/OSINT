@@ -3342,11 +3342,9 @@ def format_number_result(result, query, credits_left):
         txt += divider
 
         txt += (
-            f"\n<blockquote>"
-            f"{te(e['status_ok'], '✅')} Nᴜᴍʙᴇʀ Dᴀᴛᴀʙᴀꜱᴇ ✅\n\n"
+            f"{te(e['status_ok'], '✅')} Nᴜᴍʙᴇʀ Dᴀᴛᴀʙᴀꜱᴇ {te(e['status_ok'], '✅')}\n"
             f"{te(e['query'],   '🔭')} Qᴜᴇʀʏ    : <code>{result.get('number', query)}</code>\n"
-            f"{te(e['records'], '✍️')} Rᴇᴄᴏʀᴅꜱ  : {total} | Page {page_num}/{total_pages}"
-            f"</blockquote>\n\n"
+            f"{te(e['records'], '✍️')} Rᴇᴄᴏʀᴅꜱ  : {total} | Page {page_num}/{total_pages}\n"
         )
 
         for r_idx, record in enumerate(page_records):
@@ -3360,7 +3358,6 @@ def format_number_result(result, query, credits_left):
             def _field(val):
                 return val if val and str(val).strip() not in ("N/A", "None", "null", "") else "—"
 
-            txt += f"<blockquote>"
             txt += f"{te(e['number'],  '📲')} <b>Nᴜᴍʙᴇʀ</b>    : <code>{_field(record.get('mobile'))}</code>\n"
             txt += f"{te(e['name'],    '👤')} <b>Nᴀᴍᴇ</b>      : {_field(record.get('name'))}\n"
             _tc = _field(record.get('truecaller_name'))
@@ -3371,7 +3368,6 @@ def format_number_result(result, query, credits_left):
             txt += f"{te(e['address'], '🏡')} <b>Aᴅᴅʀᴇꜱꜱ</b>  : {_field(record.get('address'))}\n"
             txt += f"{te(e['id_card'], '💳')} <b>Iᴅ</b>        : <code>{_field(record.get('id'))}</code>\n"
             txt += f"{te(e['email'],   '📧')} <b>Eᴍᴀɪʟ</b>     : {_field(record.get('email'))}\n"
-            txt += f"</blockquote>\n\n"
 
         elapsed = round(_time.time() - start_ts, 2)
         bot_username = "@YourBot"
@@ -3391,6 +3387,7 @@ def format_number_result(result, query, credits_left):
             f"{te(e['star'], '🌟')}\n"
         )
         txt += divider
+        txt += f"⏳ <i>Tap any value to copy · save it, auto-deletes in 1 min</i>\n"
 
         markup = None
         if total_pages > 1:
@@ -9315,7 +9312,7 @@ def _copyable_values(t):
     """Result values → <code> (normal font, tap to copy)."""
     def w(m):
         val = m.group(2).strip()
-        if not val or val in ("—", "-", "N/A", "None") or any(x in m.string[max(0, m.start() - 40):m.start()] for x in ("Lᴇꜰᴛ", "ʟᴇꜰᴛ", "Left", "ᴛɪᴍᴇ", "Time", "Bʏ", "By")):
+        if not val or "| Page" in val or val in ("—", "-", "N/A", "None") or any(x in m.string[max(0, m.start() - 40):m.start()] for x in ("Lᴇꜰᴛ", "ʟᴇꜰᴛ", "Left", "ᴛɪᴍᴇ", "Time", "Bʏ", "By")):
             return m.group(0)
         import html as _h
         val = _h.escape(_h.unescape(_h.unescape(val)), quote=False)
