@@ -5514,7 +5514,7 @@ def start_cmd(message):
     markup.add(create_success_button("➕ ADD BOT TO GROUP", url=f"https://t.me/{bot_username}?startgroup=start"))
 
     if is_admin(user_id):
-        markup.add(create_success_button(" Admin Panel", callback_data="admin_panel", icon_custom_emoji_id="5339247212012528642"))
+        markup.add(create_danger_button(" Admin Panel", callback_data="admin_panel", icon_custom_emoji_id="5339247212012528642"))
 
     if message.chat.type != "private":
         markup = None  # groups: commands only, buttons only in PM
@@ -6503,68 +6503,71 @@ def insta_cmd(message):
         send_random_media(chat_id, sent_msg.message_id)
 
 
+# (label, callback, help text, premium emoji id)
 ADMIN_MENUS = {
-    "users": ("👥 Users", [
-        ("👥 User Stats", "admin_users", "Total / admin / blocked users count."),
-        ("🔍 Search User", "admin_ask_searchuser", "User ki details. Example: <code>123456789</code> ya <code>@username</code>"),
-        ("🚫 Block User", "admin_block", "User ko ban karo. Example: <code>123456789</code>"),
-        ("✅ Unblock User", "admin_unblock", "Ban hatao. Example: <code>123456789</code>"),
-        ("👑 Make Admin", "admin_makeadmin", "Admin banao. Example: <code>123456789</code>"),
-        ("🗑 Remove Admin", "admin_removeadmin", "Admin hatao. Example: <code>123456789</code>"),
+    "users": ("Users", [
+        ("User Stats", "admin_users", "Total, admin aur blocked users", "6136389654636665179"),
+        ("Search User", "admin_ask_searchuser", "Send: <code>123456789</code> or <code>@username</code>", "5424700761802023186"),
+        ("Block User", "admin_block", "Send: <code>123456789</code>", "6138614761228606277"),
+        ("Unblock User", "admin_unblock", "Send: <code>123456789</code>", "6136198451282581752"),
+        ("Make Admin", "admin_makeadmin", "Send: <code>123456789</code>", "5422464797532759490"),
+        ("Remove Admin", "admin_removeadmin", "Send: <code>123456789</code>", "6136392768487954831"),
     ]),
-    "credits": ("💰 Credits & Codes", [
-        ("➕ Add Credits", "admin_addcredits", "Credits do. Example: <code>123456789 50</code>"),
-        ("➖ Remove Credits", "admin_removecredits", "Credits kaato. Example: <code>123456789 20</code>"),
-        ("🎟 Gen Code", "admin_ask_gen", "Redeem code banao (credits, kitne log, kitne din). Example: <code>50 10 30</code>"),
-        ("📜 All Codes", "admin_run_allcodes", "Saare redeem codes dekho."),
-        ("❌ Delete Code", "admin_ask_deletecode", "Code delete. Example: <code>ABC123XY</code>"),
+    "credits": ("Credits & Codes", [
+        ("Add Credits", "admin_addcredits", "Send: <code>123456789 50</code>", "6136159783692017451"),
+        ("Remove Credits", "admin_removecredits", "Send: <code>123456789 20</code>", "6138807244482943562"),
+        ("Gen Code", "admin_ask_gen", "Credits · users · days → <code>50 10 30</code>", "6136204644625423818"),
+        ("All Codes", "admin_run_allcodes", "Saare redeem codes", "6136663351427603393"),
+        ("Delete Code", "admin_ask_deletecode", "Send: <code>ABC123XY</code>", "5425036812928164275"),
     ]),
-    "broadcast": ("📢 Broadcast", [
-        ("📢 Broadcast", "admin_broadcast_info", "Koi bhi message bhejo (text / photo / video, premium emoji ke saath) — sabko waisa hi jayega."),
-        ("📢 Broadcast Btn", "admin_bcbtn", "Message + link button. Pehle message bhejo, phir button: <code>Join Now | https://t.me/VillanCommunity</code>"),
-        ("📡 Set BC Channel", "admin_setbc_info", "Is channel ki post auto sabko jayegi. Example: <code>-1001234567890</code>"),
-        ("📡 Remove BC", "admin_run_removebc", "Auto broadcast channel hatao."),
+    "broadcast": ("Broadcast", [
+        ("Broadcast", "admin_broadcast_info", "Koi bhi message — premium emoji, quote, photo sab", "6138680877955160519"),
+        ("Broadcast + Button", "admin_bcbtn", "Message, phir <code>Join Now | https://t.me/xyz</code>", "6136367002979146040"),
+        ("Set BC Channel", "admin_setbc_info", "Send: <code>-1001234567890</code>", "6136446855011113722"),
+        ("Remove BC Channel", "admin_run_removebc", "Auto broadcast band", "6138587213308369167"),
     ]),
-    "channels": ("📡 Channels", [
-        ("➕ Add Channel", "admin_ask_addc", "Force join channel jodo. Bot step-by-step puchega: pehle Chat ID (<code>-1004443904846</code>), phir link (<code>https://t.me/VillanCommunity</code>). Bot ko channel mein admin banana zaroori hai."),
-        ("➖ Remove Channel", "admin_ask_removec", "Channel hatao. Example: <code>VillanCommunity</code>"),
-        ("📋 List Channels", "admin_run_listc", "Saare force join channels."),
-        ("✏️ Button Name", "admin_ask_renamec", "Join button pe naam. Format: <code>number naam</code>. Example: <code>1 Villan Community</code> (number List Channels ke order se)"),
-        ("📝 Join Message", "admin_joinmsg", "Force join ka message khud likho (premium emoji, bold, quote sab chalega). <code>reset</code> bhejo to default wapas."),
-        ("🔒 Lock Force Join", "admin_run_lockf", "Force join ON."),
-        ("🔓 Unlock Force Join", "admin_run_unlockf", "Force join OFF."),
+    "channels": ("Force Join", [
+        ("Add Channel", "admin_ask_addc", "Chat ID, phir link — bot step by step puchega", "6136525109315245846"),
+        ("Remove Channel", "admin_ask_removec", "Send: <code>https://t.me/xyz</code>", "6138614761228606277"),
+        ("List Channels", "admin_run_listc", "Saare force join channels", "6136663351427603393"),
+        ("Button Name", "admin_ask_renamec", "Send: <code>1 Villan Community</code>", "6136165822416033423"),
+        ("Join Message", "admin_joinmsg", "Apna join message · <code>reset</code> = default", "6136389654636665179"),
+        ("Force Join ON", "admin_run_lockf", "Join zaroori", "6136326046171011765"),
+        ("Force Join OFF", "admin_run_unlockf", "Join zaroori nahi", "6136198846419572252"),
     ]),
-    "api": ("🔗 API", [
-        ("🔗 List APIs", "admin_run_api", "Saari APIs dekho."),
-        ("✏️ Change API", "admin_ask_apic", "API URL badlo. Example: <code>num https://api.example.com/num?q={query}</code>"),
-        ("🔧 API Status", "admin_ask_apistatus", "Command on/off. Example: <code>num off Maintenance</code>"),
+    "api": ("API", [
+        ("List APIs", "admin_run_api", "Saari APIs", "5424994438780821530"),
+        ("Change API", "admin_ask_apic", "Send: <code>num https://api.xyz/num?q={query}</code>", "6138450100772411870"),
+        ("API Status", "admin_ask_apistatus", "Send: <code>num off Maintenance</code>", "6136281850957535879"),
     ]),
-    "media": ("🖼 Media", [
-        ("🎬 Add Video", "admin_run_addvideo", "Videos bhejo, phir Done Media dabao."),
-        ("🖼 Add Photo", "admin_run_addphoto", "Photos bhejo, phir Done Media dabao."),
-        ("✅ Done Media", "admin_run_done", "Upload khatam."),
-        ("⚙️ Set Mode", "admin_ask_setmode", "Welcome media mode. Example: <code>video</code> / <code>photo</code> / <code>both</code>"),
-        ("🎞 List Videos", "admin_run_listvideos", "Saare videos."),
-        ("🖼 List Photos", "admin_run_listphotos", "Saari photos."),
-        ("🗑 Delete Video", "admin_run_delvideo", "List se video delete."),
-        ("🗑 Delete Photo", "admin_run_delphoto", "List se photo delete."),
+    "media": ("Media", [
+        ("Add Video", "admin_run_addvideo", "Videos bhejo, phir Done", "5424673243946557836"),
+        ("Add Photo", "admin_run_addphoto", "Photos bhejo, phir Done", "5424897698937447043"),
+        ("Done", "admin_run_done", "Upload khatam", "6136205108481890460"),
+        ("Media Mode", "admin_ask_setmode", "Send: <code>video</code> / <code>photo</code> / <code>both</code>", "6136330925253860126"),
+        ("List Videos", "admin_run_listvideos", "Saare videos", "5424729550967807644"),
+        ("List Photos", "admin_run_listphotos", "Saari photos", "5424639292230082961"),
+        ("Delete Video", "admin_run_delvideo", "List se delete", "5425036812928164275"),
+        ("Delete Photo", "admin_run_delphoto", "List se delete", "5425036812928164275"),
     ]),
-    "bot": ("⚙️ Bot Control", [
-        ("📊 Stats", "admin_stats", "Bot ke poore stats."),
-        ("📈 Command Stats", "admin_run_commands", "Kaunsi command kitni chali."),
-        ("⏱ Uptime", "admin_run_uptime", "Bot kab se chal raha hai."),
-        ("📝 Welcome Message", "admin_welcome", "/start ka message khud likho (premium emoji, bold, quote). <code>{name}</code> <code>{id}</code> <code>{credits}</code> apne aap bhar jayenge. <code>reset</code> = default."),
-        ("🔒 Lock Bot", "admin_run_lock", "Bot sirf admin ke liye."),
-        ("🔓 Unlock Bot", "admin_run_unlock", "Bot sabke liye."),
+    "bot": ("Bot Control", [
+        ("Stats", "admin_stats", "Bot ke poore stats", "6136231213293116410"),
+        ("Command Stats", "admin_run_commands", "Kaunsi command kitni chali", "6136389654636665179"),
+        ("Uptime", "admin_run_uptime", "Bot kab se chal raha", "6138579366403119002"),
+        ("Welcome Message", "admin_welcome", "Apna /start message · <code>{name}</code> <code>{id}</code> <code>{credits}</code>", "5424611538151437896"),
+        ("Lock Bot", "admin_run_lock", "Sirf admin use kar paye", "6138614761228606277"),
+        ("Unlock Bot", "admin_run_unlock", "Sab use kar paye", "6136198451282581752"),
     ]),
 }
 
 ADMIN_CAT_ICONS = {
-    "users": "5424746868275944727", "credits": "6048770006810893912",
-    "broadcast": "5233279094531045380", "channels": "5246931953751443616",
-    "api": "5465637267626271756", "media": "5008416661569536895",
-    "bot": "5992344826715050001",
+    "users": "5424611538151437896", "credits": "6136159783692017451",
+    "broadcast": "6138680877955160519", "channels": "6136367002979146040",
+    "api": "5424994438780821530", "media": "5424673243946557836",
+    "bot": "6136165822416033423",
 }
+ADMIN_BACK_ICON = "6138930810692049889"
+ADMIN_HOME_ICON = "6136231213293116410"
 
 # callback -> (function name, command, input needed?)
 ADMIN_ACTIONS = {
@@ -6609,7 +6612,7 @@ ADMIN_ACTIONS = {
 
 def _admin_action_info(cb):
     for cat, (title, items) in ADMIN_MENUS.items():
-        for label, d, desc in items:
+        for label, d, desc, _ic in items:
             if d == cb:
                 return cat, label, desc
     return None, cb, ""
@@ -6619,31 +6622,41 @@ def admin_back_markup(cat=None):
     markup = InlineKeyboardMarkup(row_width=2)
     btns = []
     if cat:
-        btns.append(create_default_button("🔙 Back", callback_data=f"admin_cat_{cat}"))
-    btns.append(create_success_button("🏠 Admin Panel", callback_data="admin_cat_main"))
+        btns.append(create_default_button(" " + sc("Back"), callback_data=f"admin_cat_{cat}",
+                                          icon_custom_emoji_id=ADMIN_BACK_ICON))
+    btns.append(create_danger_button(" " + sc("Admin Panel"), callback_data="admin_cat_main",
+                                     icon_custom_emoji_id=ADMIN_HOME_ICON))
     markup.add(*btns)
     return markup
 
 
+def admin_main_text():
+    return (f"<blockquote>{te(ADMIN_HOME_ICON, '🏆')} <b>{sc('Admin Panel')}</b> {te(ADMIN_HOME_ICON, '🏆')}</blockquote>\n"
+            f"<blockquote>{te('6138500424904219564', '➡️')} {sc('Choose a section below')}</blockquote>")
+
+
 def admin_cat_text(cat):
     title, items = ADMIN_MENUS[cat]
-    lines = [f"<b>{title}</b>\n", "Button dabao, bot batayega kya bhejna hai.\n"]
-    for label, _, desc in items:
-        lines.append(f"<b>{label}</b> — {desc}")
-    return "<blockquote>" + "\n".join(lines) + "</blockquote>"
+    lines = [f"<blockquote>{te(ADMIN_CAT_ICONS[cat], '⭐')} <b>{sc(title)}</b></blockquote>", "<blockquote>"]
+    for label, _, desc, ic in items:
+        lines.append(f"{te(ic, '⭐')} <b>{sc(label)}</b>\n      {desc}\n")
+    lines.append("</blockquote>")
+    return "\n".join(lines)
 
 
 def admin_menu_markup(cat=None):
     markup = InlineKeyboardMarkup(row_width=2)
     if cat is None:
-        btns = [create_success_button(" " + title.split(" ", 1)[1], callback_data=f"admin_cat_{k}",
+        btns = [create_success_button(" " + sc(title), callback_data=f"admin_cat_{k}",
                                       icon_custom_emoji_id=ADMIN_CAT_ICONS[k])
                 for k, (title, _) in ADMIN_MENUS.items()]
     else:
-        btns = [create_primary_button(t, callback_data=d) for t, d, _ in ADMIN_MENUS[cat][1]]
+        btns = [create_primary_button(" " + sc(t), callback_data=d, icon_custom_emoji_id=ic)
+                for t, d, _, ic in ADMIN_MENUS[cat][1]]
     markup.add(*btns)
     if cat is not None:
-        markup.add(create_default_button("🔙 Back", callback_data="admin_cat_main"))
+        markup.add(create_danger_button(" " + sc("Back"), callback_data="admin_cat_main",
+                                        icon_custom_emoji_id=ADMIN_BACK_ICON))
     return markup
 
 
@@ -8076,7 +8089,7 @@ def callback_handler(call):
             bot.answer_callback_query(call.id)
             bot.clear_step_handler_by_chat_id(call.message.chat.id)
             if cat == "main":
-                text = "<blockquote><b>⚙️ ADMIN PANEL</b>\n\nSection chuno 👇</blockquote>"
+                text = admin_main_text()
                 mk = admin_menu_markup()
             elif cat in ADMIN_MENUS:
                 text, mk = admin_cat_text(cat), admin_menu_markup(cat)
@@ -8215,7 +8228,8 @@ def callback_handler(call):
                 return
             prompt = bot.send_message(
                 call.message.chat.id,
-                f"<blockquote><b>{label}</b>\n\n{desc}\n\n✏️ Ab bhejo 👇</blockquote>",
+                f"<blockquote>{te(ADMIN_CAT_ICONS.get(cat, ADMIN_HOME_ICON), '⭐')} <b>{sc(label)}</b>\n\n{desc}\n\n"
+                f"{te('6138500424904219564', '➡️')} {sc('Send it now')}</blockquote>",
                 parse_mode="HTML", reply_markup=admin_back_markup(cat))
 
             def _on_reply(rm, fn=fn, cmd=cmd, cat=cat):
