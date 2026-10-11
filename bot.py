@@ -6690,12 +6690,14 @@ def insta_cmd(message):
 
 # (label, callback, help text, premium emoji id)
 ADMIN_MENUS = {
-    "users": ("Users", [
+    "users": ("Admin", [
+        ("Bot Admins", "admin_admins", "Owner + saare admins naam aur ID ke saath", "6136231213293116410"),
+        ("Add Admin", "admin_addadm", "Send: <code>Rahul 🔥 123456789</code> (pehle naam, phir ID)", "6136525109315245846"),
+        ("Remove Admin", "admin_rmlist", "List se tap karke hatao", "6138614761228606277"),
         ("User Stats", "admin_users", "Total, admin aur blocked users", "6136389654636665179"),
         ("Search User", "admin_ask_searchuser", "Send: <code>123456789</code> or <code>@username</code>", "5424700761802023186"),
         ("Block User", "admin_block", "Send: <code>123456789</code>", "6138614761228606277"),
         ("Unblock User", "admin_unblock", "Send: <code>123456789</code>", "6136198451282581752"),
-        ("Admins", "admin_admins", "Saare admins naam + UID ke saath · Add / Remove", "5422464797532759490"),
     ]),
     "credits": ("Credits & Codes", [
         ("Add Credits", "admin_addcredits", "Send: <code>123456789 50</code>", "6136159783692017451"),
@@ -6832,35 +6834,98 @@ def _run_in_place(fn, msg, chat_id, message_id, cat):
             pass
 
 
-def admins_view(viewer_id):
-    """Admin list with names (premium emoji allowed) + UID, add/remove buttons (owner only)."""
-    import html as _html
+_OWNER_UNAME = {}
+
+
+def _owner_tag():
+    if "u" not in _OWNER_UNAME:
+        try:
+            u = bot.get_chat(ADMIN_ID).username
+            _OWNER_UNAME["u"] = f"@{u}" if u else "Owner"
+        except Exception:
+            return "Owner"
+    return _OWNER_UNAME["u"]
+
+
+def _admin_docs():
     try:
-        docs = list(_col_users.find({"is_admin": 1}, {"user_id": 1, "admin_label": 1, "first_name": 1}))
+        return [d for d in _col_users.find({"is_admin": 1}, {"user_id": 1, "admin_label": 1, "first_name": 1})
+                if d["user_id"] != ADMIN_ID]
     except Exception:
-        docs = []
-    lines = [f"<blockquote>{te('5422464797532759490', '👮')} <b>{sc('Admins')}</b></blockquote>", "<blockquote>"]
-    lines.append(f"{te(ADMIN_HOME_ICON, '🏆')} <b>{sc('Owner')}</b>\n      🆔 <code>{ADMIN_ID}</code>\n")
-    for i, d in enumerate([d for d in docs if d["user_id"] != ADMIN_ID], 1):
-        name = d.get("admin_label") or _html.escape(d.get("first_name") or "Admin")
-        lines.append(f"{i}. {name}\n      🆔 <code>{d['user_id']}</code>\n")
-    if len(lines) == 3:
-        lines.append("Abhi koi aur admin nahi hai.\n")
-    lines.append("</blockquote>")
-    if viewer_id != ADMIN_ID:
-        lines.append("<blockquote>🔒 Admin add/remove sirf owner kar sakta hai.</blockquote>")
-    mk = InlineKeyboardMarkup(row_width=1)
+        return []
+
+
+def _admin_name(d):
+    import html as _html
+    return d.get("admin_label") or _html.escape(d.get("first_name") or "Admin")
+
+
+def admins_view(viewer_id):
+    docs = _admin_docs()
+    div = "━━━━━━━━━━━━━━━━━━━━"
+    adm = "\n".join(f"👤 {_admin_name(d)} · <code>{d['user_id']}</code>" for d in docs) or "👤 Abhi koi admin nahi"
+    text = (f"👑 <b>BOT ADMINS</b>\n{div}\n"
+            f"👑 <b>Owners · 1</b>\n<blockquote>👑 {_owner_tag()} · <code>{ADMIN_ID}</code></blockquote>\n"
+            f"👤 <b>Admins · {len(docs)}</b>\n<blockquote>{adm}</blockquote>\n"
+            f"📌 <i>Add one: /addadmin Name user_id</i>")
+    mk = InlineKeyboardMarkup(row_width=2)
     if viewer_id == ADMIN_ID:
-        mk.add(create_success_button(" Add Admin", callback_data="admin_addadm",
-                                     icon_custom_emoji_id="6136525109315245846"))
-        for d in docs:
-            if d["user_id"] == ADMIN_ID:
-                continue
-            plain = re.sub(r"<[^>]+>", "", d.get("admin_label") or d.get("first_name") or "Admin")[:20]
-            mk.add(create_danger_button(f" Remove {plain} ({d['user_id']})", callback_data=f"admin_rmadm_{d['user_id']}",
-                                        icon_custom_emoji_id="6021413766669801212"))
+        mk.add(create_success_button(" Add Admin", callback_data="admin_addadm", icon_custom_emoji_id="6136525109315245846"),
+               create_danger_button(" Remove Admin", callback_data="admin_rmlist", icon_custom_emoji_id="6138614761228606277"))
     mk.add(create_danger_button(" Back", callback_data="admin_cat_users", icon_custom_emoji_id=ADMIN_BACK_ICON))
-    return "\n".join(lines), mk
+    return text, mk
+
+
+def remove_admin_view():
+    docs = _admin_docs()
+    div = "━━━━━━━━━━━━━━━━━━━━"
+    adm = "\n".join(f"👤 {_admin_name(d)} · <code>{d['user_id']}</code>" for d in docs) or "Abhi koi admin nahi"
+    text = (f"👤 <b>REMOVE ADMIN</b>\n{div}\n<blockquote>{adm}</blockquote>\n"
+            f"📌 <i>Tap a Remove button, or tap an ID to copy it and send it here.</i>")
+    mk = InlineKeyboardMarkup(row_width=1)
+    for d in docs:
+        plain = re.sub(r"<[^>]+>", "", _admin_name(d))[:25]
+        mk.add(create_danger_button(f" Remove {plain}", callback_data=f"admin_rmadm_{d['user_id']}",
+                                    icon_custom_emoji_id="6019102674832595118"))
+    mk.add(create_primary_button(" Cancel", callback_data="admin_admins", icon_custom_emoji_id=ADMIN_BACK_ICON))
+    return text, mk
+
+
+def add_admin_from_text(text_plain, text_html):
+    """'Name user_id' (name may contain premium emoji). Returns (ok, msg)."""
+    parts = text_plain.rsplit(maxsplit=1)
+    if len(parts) < 2 or not parts[1].isdigit():
+        return False, "❌ Format: <code>Name user_id</code>\nExample: <code>Rahul 🔥 123456789</code>"
+    tid = int(parts[1])
+    if tid == ADMIN_ID:
+        return False, "❌ Ye owner hai."
+    hp = (text_html or text_plain).rsplit(maxsplit=1)
+    label = hp[0].strip() if len(hp) == 2 else parts[0]
+    _col_users.update_one({"user_id": tid},
+                          {"$set": {"is_admin": 1, "admin_label": label},
+                           "$setOnInsert": {"credits": 0, "first_name": "Admin",
+                                            "join_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}},
+                          upsert=True)
+    try:
+        send_with_premium(tid, "✅ You are now an admin! Send /admin")
+    except Exception:
+        pass
+    return True, f"✅ {label} · <code>{tid}</code> ab admin hai."
+
+
+@bot.message_handler(commands=['addadmin'])
+def addadmin_cmd(message):
+    if message.from_user.id != ADMIN_ID:
+        send_with_premium(message.chat.id, "🔒 Sirf owner admin add kar sakta hai.")
+        return
+    raw = message.text.split(maxsplit=1)
+    html_raw = (getattr(message, "html_text", None) or message.text).split(maxsplit=1)
+    if len(raw) < 2:
+        send_with_premium(message.chat.id, "❌ Use: <code>/addadmin Name user_id</code>")
+        return
+    ok, msg = add_admin_from_text(raw[1], html_raw[1] if len(html_raw) > 1 else raw[1])
+    t, mk = admins_view(ADMIN_ID)
+    send_with_premium(message.chat.id, msg + "\n\n" + t, reply_markup=mk)
 
 
 def admin_main_text():
@@ -8553,57 +8618,55 @@ def callback_handler(call):
             bot.register_next_step_handler(prompt, _on_wm)
             return
 
-        if call.data in ("admin_admins", "admin_addadm") or call.data.startswith("admin_rmadm_"):
+        if call.data in ("admin_admins", "admin_addadm", "admin_rmlist") or call.data.startswith("admin_rmadm_"):
             cid, mid = call.message.chat.id, call.message.message_id
             owner = call.from_user.id == ADMIN_ID
             if call.data != "admin_admins" and not owner:
                 bot.answer_callback_query(call.id, "🔒 Sirf owner admin add/remove kar sakta hai.", True)
                 return
-            if call.data.startswith("admin_rmadm_"):
-                tid = int(call.data[len("admin_rmadm_"):])
-                _col_users.update_one({"user_id": tid}, {"$set": {"is_admin": 0}})
-                bot.answer_callback_query(call.id, f"✅ {tid} ab admin nahi hai")
-                try:
-                    send_with_premium(tid, "❌ You have been removed from admin.")
-                except Exception:
-                    pass
-            elif call.data == "admin_addadm":
+            if call.data == "admin_admins":
+                bot.answer_callback_query(call.id)
+                t, mk = admins_view(call.from_user.id)
+            elif call.data.startswith("admin_rmadm_") or call.data == "admin_rmlist":
+                if call.data.startswith("admin_rmadm_"):
+                    tid = int(call.data[len("admin_rmadm_"):])
+                    _col_users.update_one({"user_id": tid}, {"$set": {"is_admin": 0}})
+                    bot.answer_callback_query(call.id, f"✅ {tid} removed")
+                    try:
+                        send_with_premium(tid, "❌ You have been removed from admin.")
+                    except Exception:
+                        pass
+                else:
+                    bot.answer_callback_query(call.id)
+                t, mk = remove_admin_view()
+
+                def _on_rm_id(rm):
+                    if rm.from_user.id != ADMIN_ID or not rm.text or not rm.text.strip().isdigit():
+                        return
+                    tid2 = int(rm.text.strip())
+                    _col_users.update_one({"user_id": tid2}, {"$set": {"is_admin": 0}})
+                    t3, mk3 = remove_admin_view()
+                    edit_with_premium(cid, mid, f"✅ <code>{tid2}</code> removed\n\n" + t3, reply_markup=mk3)
+
+                bot.register_next_step_handler_by_chat_id(cid, _on_rm_id)
+            else:  # admin_addadm
                 bot.answer_callback_query(call.id)
                 back = InlineKeyboardMarkup()
-                back.add(create_danger_button(" Back", callback_data="admin_admins", icon_custom_emoji_id=ADMIN_BACK_ICON))
+                back.add(create_primary_button(" Cancel", callback_data="admin_admins", icon_custom_emoji_id=ADMIN_BACK_ICON))
                 edit_with_premium(cid, mid,
-                    "<blockquote>👮 <b>Add Admin</b>\n\nUID aur naam bhejo (naam mein premium emoji bhi chalega):\n\n"
-                    "<code>123456789 Rahul 🔥</code>\n\nUID pata karne ke liye user se bot pe /start karwao — "
-                    "Profile mein ID dikhti hai.\nSame UID dobara bhejo to naam update ho jayega.</blockquote>",
-                    reply_markup=back)
+                    "👤 <b>ADD ADMIN</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Pehle naam, phir user ID bhejo.\n"
+                    "Naam mein premium emoji bhi chalega.\n\n<code>Rahul 🔥 123456789</code></blockquote>\n"
+                    "📌 <i>Same ID dobara bhejo to naam update ho jayega.</i>", reply_markup=back)
 
                 def _on_add(rm):
                     if rm.from_user.id != ADMIN_ID or not rm.text or rm.text.startswith("/"):
                         return
-                    parts = rm.text.split(maxsplit=1)
-                    if not parts[0].isdigit():
-                        bot.send_message(rm.chat.id, "❌ Pehle UID (sirf number), phir naam. Example: 123456789 Rahul")
-                        return
-                    tid = int(parts[0])
-                    html_txt = getattr(rm, "html_text", None) or rm.text
-                    label = html_txt.split(maxsplit=1)[1].strip() if len(html_txt.split(maxsplit=1)) > 1 else "Admin"
-                    _col_users.update_one({"user_id": tid},
-                                          {"$set": {"is_admin": 1, "admin_label": label},
-                                           "$setOnInsert": {"credits": 0, "first_name": "Admin",
-                                                            "join_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}},
-                                          upsert=True)
-                    try:
-                        send_with_premium(tid, "✅ You are now an admin! Send /admin")
-                    except Exception:
-                        pass
+                    ok, msg2 = add_admin_from_text(rm.text, getattr(rm, "html_text", None))
                     t2, mk2 = admins_view(ADMIN_ID)
-                    edit_with_premium(cid, mid, "✅ Admin added!\n" + t2, reply_markup=mk2)
+                    edit_with_premium(cid, mid, msg2 + "\n\n" + t2, reply_markup=mk2)
 
                 bot.register_next_step_handler_by_chat_id(cid, _on_add)
                 return
-            else:
-                bot.answer_callback_query(call.id)
-            t, mk = admins_view(call.from_user.id)
             edit_with_premium(cid, mid, t, reply_markup=mk)
             return
 
