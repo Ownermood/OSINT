@@ -1524,8 +1524,8 @@ def plans_text():
         f"{R} Weekly : <b>{plan_weekly()}</b>\n"
         f"{B} Monthly : <b>{plan_monthly()}</b>\n\n"
         f"{L} <b>Protect My Number</b> : <b>{plan_protect()}</b>\n"
-        f"      Aapka number bot ke kisi search mein nahi dikhega.\n\n"
-        f"{S} Niche button dabao aur admin se baat karo.</blockquote>"
+        f"      Your number will not appear in any search on this bot.\n\n"
+        f"{S} Tap a button below to contact the admin.</blockquote>"
     )
 
 
@@ -3483,7 +3483,7 @@ def format_number_result(result, query, credits_left):
             f"{te(e['star'], '🌟')}\n"
         )
         txt += divider
-        txt += f"⏳ <i>Record box pe Copy dabao — poora record copy · auto-deletes in 1 min</i>\n"
+        txt += f"⏳ <i>Tap Copy on a record box to copy the whole record · auto-deletes in 1 min</i>\n"
 
         markup = None
         if total_pages > 1:
@@ -6808,11 +6808,11 @@ def insta_cmd(message):
 # (label, callback, help text, premium emoji id)
 ADMIN_MENUS = {
     "users": ("Admin", [
-        ("Bot Admins", "admin_admins", "Owner + saare admins naam aur ID ke saath", "6136231213293116410"),
-        ("Add Admin", "admin_addadm", "Send: <code>Rahul 🔥 123456789</code> (pehle naam, phir ID)", "6136525109315245846"),
-        ("Remove Admin", "admin_rmlist", "List se tap karke hatao", "6138614761228606277"),
-        ("Protected Numbers", "admin_protect", "In numbers ka data kisi ko nahi dikhega", "6019328362479097179"),
-        ("User Stats", "admin_users", "Total, admin aur blocked users", "6136389654636665179"),
+        ("Bot Admins", "admin_admins", "Owner and all admins with name and ID", "6136231213293116410"),
+        ("Add Admin", "admin_addadm", "Send: <code>Rahul 🔥 123456789</code> (name first, then ID)", "6136525109315245846"),
+        ("Remove Admin", "admin_rmlist", "Tap in the list to remove", "6138614761228606277"),
+        ("Protected Numbers", "admin_protect", "These numbers stay hidden from every search", "6019328362479097179"),
+        ("User Stats", "admin_users", "Total, admin and blocked users", "6136389654636665179"),
         ("Search User", "admin_ask_searchuser", "Send: <code>123456789</code> or <code>@username</code>", "5424700761802023186"),
         ("Block User", "admin_block", "Send: <code>123456789</code>", "6138614761228606277"),
         ("Unblock User", "admin_unblock", "Send: <code>123456789</code>", "6136198451282581752"),
@@ -6821,49 +6821,49 @@ ADMIN_MENUS = {
         ("Add Credits", "admin_addcredits", "Send: <code>123456789 50</code>", "6136159783692017451"),
         ("Remove Credits", "admin_removecredits", "Send: <code>123456789 20</code>", "6138807244482943562"),
         ("Gen Code", "admin_ask_gen", "Credits · users · days → <code>50 10 30</code>", "6136204644625423818"),
-        ("All Codes", "admin_run_allcodes", "Saare redeem codes", "6136663351427603393"),
+        ("All Codes", "admin_run_allcodes", "All redeem codes", "6136663351427603393"),
         ("Delete Code", "admin_ask_deletecode", "Send: <code>ABC123XY</code>", "5425036812928164275"),
-        ("Pricing", "admin_pricing", "Plan ke daam badlo (Weekly / Monthly / Protect)", "6136159783692017451"),
+        ("Pricing", "admin_pricing", "Change plan prices (Weekly / Monthly / Protect)", "6136159783692017451"),
     ]),
     "broadcast": ("Broadcast", [
-        ("Broadcast", "admin_broadcast_info", "Koi bhi message — premium emoji, quote, photo sab", "6138680877955160519"),
-        ("Broadcast + Button", "admin_bcbtn", "Message, phir <code>Join Now | https://t.me/xyz</code>", "6136367002979146040"),
-        ("Delete Last Broadcast", "admin_delbc", "Aakhri broadcast sabke chat se delete", "6021413766669801212"),
-        ("Set BC Channel", "admin_setbc_info", "Is channel ki post auto sabko → <code>-1001234567890</code>", "6136446855011113722"),
-        ("Remove BC Channel", "admin_run_removebc", "Auto broadcast band", "6138587213308369167"),
+        ("Broadcast", "admin_broadcast_info", "Any message — premium emoji, quote, photo", "6138680877955160519"),
+        ("Broadcast + Button", "admin_bcbtn", "Send message, then <code>Join Now | https://t.me/xyz</code>", "6136367002979146040"),
+        ("Delete Last Broadcast", "admin_delbc", "Delete the last broadcast from everyone's chat", "6021413766669801212"),
+        ("Set BC Channel", "admin_setbc_info", "Auto-send this channel's posts to everyone → <code>-1001234567890</code>", "6136446855011113722"),
+        ("Remove BC Channel", "admin_run_removebc", "Turn off auto broadcast", "6138587213308369167"),
     ]),
     "channels": ("Force Join", [
-        ("List Channels", "admin_run_listc", "Saare force join channels", "6136663351427603393"),
-        ("Add Channel", "admin_ask_addc", "Chat ID, phir link — bot step by step puchega", "6136525109315245846"),
+        ("List Channels", "admin_run_listc", "All force-join channels", "6136663351427603393"),
+        ("Add Channel", "admin_ask_addc", "Chat ID, then link — bot asks step by step", "6136525109315245846"),
         ("Remove Channel", "admin_ask_removec", "Send: <code>https://t.me/xyz</code>", "6138614761228606277"),
         ("Button Name", "admin_ask_renamec", "Send: <code>1 Villan Community</code>", "6136165822416033423"),
-        ("Force Join", "admin_fjtoggle", "Tap = ON/OFF. ON = channel join kiye bina bot nahi chalega", "6136326046171011765"),
+        ("Force Join", "admin_fjtoggle", "Tap = ON/OFF. ON = must join channels to use the bot", "6136326046171011765"),
     ]),
     "messages": ("Messages", [
-        ("Welcome Message", "admin_welcome", "Apna /start message · <code>{name}</code> <code>{id}</code> <code>{credits}</code> <code>{free}</code>", "5424611538151437896"),
-        ("Join Message", "admin_joinmsg", "Force join ka message · <code>reset</code> = default", "6136389654636665179"),
+        ("Welcome Message", "admin_welcome", "Your own /start message · <code>{name}</code> <code>{id}</code> <code>{credits}</code> <code>{free}</code>", "5424611538151437896"),
+        ("Join Message", "admin_joinmsg", "The force-join message · <code>reset</code> = default", "6136389654636665179"),
     ]),
     "api": ("API", [
-        ("API Manager", "admin_run_api", "Har API ka URL dekho, badlo, ON/OFF", "5424994438780821530"),
+        ("API Manager", "admin_run_api", "View each API URL, change it, turn ON/OFF", "5424994438780821530"),
         ("Change API", "admin_ask_apic", "Send: <code>num https://api.xyz/num?number={query}</code>", "6138450100772411870"),
         ("API Status", "admin_ask_apistatus", "Send: <code>num off Maintenance</code>", "6136281850957535879"),
     ]),
     "media": ("Media", [
-        ("Add Video", "admin_run_addvideo", "Videos bhejo, phir Done", "5424673243946557836"),
-        ("Add Photo", "admin_run_addphoto", "Photos bhejo, phir Done", "5424897698937447043"),
-        ("Done", "admin_run_done", "Upload khatam", "6136205108481890460"),
+        ("Add Video", "admin_run_addvideo", "Send videos, then tap Done", "5424673243946557836"),
+        ("Add Photo", "admin_run_addphoto", "Send photos, then tap Done", "5424897698937447043"),
+        ("Done", "admin_run_done", "Finish upload", "6136205108481890460"),
         ("Media Mode", "admin_ask_setmode", "Send: <code>video</code> / <code>photo</code> / <code>both</code>", "6136330925253860126"),
-        ("List Videos", "admin_run_listvideos", "Saare videos", "5424729550967807644"),
-        ("List Photos", "admin_run_listphotos", "Saari photos", "5424639292230082961"),
-        ("Delete Video", "admin_run_delvideo", "List se delete", "5425036812928164275"),
-        ("Delete Photo", "admin_run_delphoto", "List se delete", "5425036812928164275"),
+        ("List Videos", "admin_run_listvideos", "All videos", "5424729550967807644"),
+        ("List Photos", "admin_run_listphotos", "All photos", "5424639292230082961"),
+        ("Delete Video", "admin_run_delvideo", "Delete from the list", "5425036812928164275"),
+        ("Delete Photo", "admin_run_delphoto", "Delete from the list", "5425036812928164275"),
     ]),
     "bot": ("Bot Control", [
-        ("Stats", "admin_stats", "Bot ke poore stats", "6136231213293116410"),
-        ("Command Stats", "admin_run_commands", "Kaunsi command kitni chali", "6136389654636665179"),
-        ("Uptime", "admin_run_uptime", "Bot kab se chal raha", "6138579366403119002"),
-        ("Lock Bot", "admin_run_lock", "Sirf admin use kar paye", "6138614761228606277"),
-        ("Unlock Bot", "admin_run_unlock", "Sab use kar paye", "6136198451282581752"),
+        ("Stats", "admin_stats", "Full bot statistics", "6136231213293116410"),
+        ("Command Stats", "admin_run_commands", "How many times each command ran", "6136389654636665179"),
+        ("Uptime", "admin_run_uptime", "How long the bot has been running", "6138579366403119002"),
+        ("Lock Bot", "admin_run_lock", "Only admins can use the bot", "6138614761228606277"),
+        ("Unlock Bot", "admin_run_unlock", "Everyone can use the bot", "6136198451282581752"),
     ]),
 }
 
@@ -6982,7 +6982,7 @@ def _admin_name(d):
 def admins_view(viewer_id):
     docs = _admin_docs()
     div = "━━━━━━━━━━━━━━━━━━━━"
-    adm = "\n".join(f"👤 {_admin_name(d)} · <code>{d['user_id']}</code>" for d in docs) or "👤 Abhi koi admin nahi"
+    adm = "\n".join(f"👤 {_admin_name(d)} · <code>{d['user_id']}</code>" for d in docs) or "👤 No admins yet"
     text = (f"👑 <b>BOT ADMINS</b>\n{div}\n"
             f"👑 <b>Owners · 1</b>\n<blockquote>👑 {_owner_tag()} · <code>{ADMIN_ID}</code></blockquote>\n"
             f"👤 <b>Admins · {len(docs)}</b>\n<blockquote>{adm}</blockquote>\n"
@@ -6998,7 +6998,7 @@ def admins_view(viewer_id):
 def remove_admin_view():
     docs = _admin_docs()
     div = "━━━━━━━━━━━━━━━━━━━━"
-    adm = "\n".join(f"👤 {_admin_name(d)} · <code>{d['user_id']}</code>" for d in docs) or "Abhi koi admin nahi"
+    adm = "\n".join(f"👤 {_admin_name(d)} · <code>{d['user_id']}</code>" for d in docs) or "No admins yet"
     text = (f"👤 <b>REMOVE ADMIN</b>\n{div}\n<blockquote>{adm}</blockquote>\n"
             f"📌 <i>Tap a Remove button, or tap an ID to copy it and send it here.</i>")
     mk = InlineKeyboardMarkup(row_width=1)
@@ -7043,7 +7043,7 @@ def admins_cmd(message):
 @bot.message_handler(commands=['addadmin'])
 def addadmin_cmd(message):
     if message.from_user.id != ADMIN_ID:
-        send_with_premium(message.chat.id, "🔒 Sirf owner admin add kar sakta hai.")
+        send_with_premium(message.chat.id, "🔒 Only the owner can add admins.")
         return
     raw = message.text.split(maxsplit=1)
     html_raw = (getattr(message, "html_text", None) or message.text).split(maxsplit=1)
@@ -7063,9 +7063,9 @@ def protect_view():
     rows = []
     for d in docs:
         rows.append(f"🔒 <code>{d['num']}</code> · 👤 <code>{d.get('user_id','?')}</code> · ⏳ {_fmt_left(d.get('expire_ts',0))}")
-    body = "\n".join(rows) or "Abhi koi number protected nahi."
+    body = "\n".join(rows) or "No protected numbers yet."
     text = (f"🔒 <b>PROTECTED NUMBERS · {len(docs)}</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>{body}</blockquote>\n"
-            f"📌 <i>In numbers ka data bot kisi search mein nahi dikhayega (owner ke alawa).</i>\n"
+            f"📌 <i>These numbers stay hidden from every search (except the owner).</i>\n"
             f"📌 <i>/protect user_id number days  ·  days 0 = lifetime  ·  /unprotect number</i>")
     mk = InlineKeyboardMarkup(row_width=1)
     mk.add(create_success_button(" Add Protection", callback_data="admin_protadd", icon_custom_emoji_id="6019328362479097179"))
@@ -7117,7 +7117,7 @@ def protect_cmd(message):
         return
     n = protect_add(*pr)
     if not n:
-        send_with_premium(message.chat.id, "❌ Valid number bhejo.")
+        send_with_premium(message.chat.id, "❌ Send a valid number.")
         return
     _notify_protect_added(pr[0], n, pr[2])
     t, mk = protect_view()
@@ -7154,7 +7154,7 @@ def pricing_view():
             f"⚡ Weekly  : <b>{plan_weekly()}</b>\n"
             f"👑 Monthly : <b>{plan_monthly()}</b>\n"
             f"🔒 Protect : <b>{plan_protect()}</b></blockquote>\n"
-            "📌 <i>Button dabao aur naya text bhejo. Example: <code>₹149 / month</code></i>")
+            "📌 <i>Tap a button and send the new text. Example: <code>₹149 / month</code></i>")
     mk = InlineKeyboardMarkup(row_width=1)
     mk.add(create_primary_button(" Set Weekly Price", callback_data="admin_setprice_weekly", icon_custom_emoji_id="6136326046171011765"))
     mk.add(create_primary_button(" Set Monthly Price", callback_data="admin_setprice_monthly", icon_custom_emoji_id="6219727185708582935"))
@@ -7284,7 +7284,7 @@ def delete_broadcast(admin_chat_id, bc_id=None, edit_msg_id=None):
     q = {"_id": ObjectId(bc_id)} if bc_id else {"deleted": False}
     doc = _col_broadcasts.find_one(q, sort=[("ts", -1)])
     if not doc or doc.get("deleted"):
-        bot.send_message(admin_chat_id, "❌ Ye broadcast pehle hi delete ho chuka hai ya mila nahi.",
+        bot.send_message(admin_chat_id, "❌ This broadcast was already deleted or not found.",
                          reply_markup=admin_back_markup("broadcast"))
         return
     pairs = doc.get("sent", [])
@@ -7315,7 +7315,7 @@ def delete_broadcast(admin_chat_id, bc_id=None, edit_msg_id=None):
     try:
         bot.edit_message_text(
             f"<blockquote>✅ <b>Broadcast Deleted!</b>\n\n🗑 Deleted: <b>{ok}</b>\n❌ Failed: <b>{fail}</b>\n📊 Total: <b>{total}</b>\n\n"
-            f"⏳ 48 ghante se purane message Telegram delete nahi karne deta.</blockquote>",
+            f"⏳ Telegram does not allow deleting messages older than 48 hours.</blockquote>",
             admin_chat_id, prog_id, parse_mode="HTML", reply_markup=admin_back_markup("broadcast"))
     except Exception:
         pass
@@ -7381,7 +7381,7 @@ def broadcast_copy(admin_chat_id, src, markup=None):
         bot.edit_message_text(
             f"<blockquote>✅ <b>Broadcast Done!</b>\n\n{_progress_bar(1, 1)}  100%\n\n"
             f"📊 Total: <b>{total}</b>\n✅ Sent: <b>{state['ok']}</b>\n❌ Failed: <b>{state['fail']}</b>\n\n"
-            f"ℹ️ Failed = jinhone bot block kiya ya kabhi /start nahi kiya.</blockquote>",
+            f"ℹ️ Failed = users who blocked the bot or never pressed /start.</blockquote>",
             admin_chat_id, prog.message_id, parse_mode="HTML", reply_markup=mk)
     except Exception:
         pass
@@ -7404,7 +7404,7 @@ def admin_cmd(message):
         send_with_premium(message.chat.id, "❌ Admin only!")
         return
     if message.chat.type != "private":
-        send_with_premium(message.chat.id, "⚙️ Admin panel sirf bot ke PM mein khulega.")
+        send_with_premium(message.chat.id, "⚙️ The admin panel only opens in the bot's private chat.")
         return
     admin_panel(message)
 
@@ -7555,7 +7555,7 @@ def all_codes_cmd(message):
 def promote_cmd(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
-        send_with_premium(message.chat.id, "🔒 Sirf owner admin add/remove kar sakta hai.")
+        send_with_premium(message.chat.id, "🔒 Only the owner can add or remove admins.")
         return
     parts = message.text.split()
     if len(parts) < 2:
@@ -7582,7 +7582,7 @@ def promote_cmd(message):
 def demote_cmd(message):
     user_id = message.from_user.id
     if user_id != ADMIN_ID:
-        send_with_premium(message.chat.id, "🔒 Sirf owner admin add/remove kar sakta hai.")
+        send_with_premium(message.chat.id, "🔒 Only the owner can add or remove admins.")
         return
     parts = message.text.split()
     if len(parts) < 2:
@@ -8201,7 +8201,7 @@ def api_list_view(with_back=True):
     on = sum(1 for c in apis if check_api_status(c)[0])
     text = (f"<blockquote>🔗 <b>API Manager</b></blockquote>\n"
             f"<blockquote>✅ Working: <b>{on}</b>   ⛔ Off: <b>{len(apis) - on}</b>\n\n"
-            f"👉 Kisi command pe tap karo — URL dekho, badlo ya ON/OFF karo.\n🔵 Blue = working   🔴 Red = off</blockquote>")
+            f"👉 Tap a command to view, change or toggle its URL.\n🔵 Blue = working   🔴 Red = off</blockquote>")
     mk = InlineKeyboardMarkup(row_width=3)
     btns = []
     for c in apis:
@@ -8770,9 +8770,9 @@ def callback_handler(call):
             if docs:
                 rows = "\n".join(f"🔒 <code>{d['num']}</code> · ⏳ {_fmt_left(d.get('expire_ts',0))}" for d in docs)
             else:
-                rows = "Aapka koi number protected nahi hai."
+                rows = "You have no protected numbers."
             txt = (f"🔒 <b>MY PROTECTION</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>{rows}</blockquote>\n"
-                   f"📌 <i>Protected number ka data kisi search mein nahi dikhta.</i>")
+                   f"📌 <i>A protected number stays hidden from every search.</i>")
             back = InlineKeyboardMarkup()
             back.add(create_default_button(" Back", callback_data="back_start", icon_custom_emoji_id="6138930810692049889"))
             try:
@@ -8824,7 +8824,7 @@ def callback_handler(call):
                                            icon_custom_emoji_id="6138930810692049889"))
             try:
                 edit_with_premium(call.message.chat.id, call.message.message_id,
-                                  "<blockquote><b>🎟 REDEEM CODE</b>\n\nApna redeem code bhejo 👇\n"
+                                  "<blockquote><b>🎟 REDEEM CODE</b>\n\nSend your redeem code 👇\n"
                                   "Example: <code>ABC123XY</code></blockquote>", reply_markup=back)
             except Exception:
                 pass
@@ -8873,9 +8873,9 @@ def callback_handler(call):
             bot.answer_callback_query(call.id)
             prompt = bot.send_message(
                 call.message.chat.id,
-                "<blockquote><b>📢 Broadcast</b>\n\nAb wo message bhejo jo sabko jana chahiye.\n"
-                "Text, photo, video — premium emojis ke saath — sab waisa hi jayega.\n\n"
-                "Example: <i>🔥 New update aa gaya! /start karo</i></blockquote>",
+                "<blockquote><b>📢 Broadcast</b>\n\nNow send the message you want everyone to receive.\n"
+                "Text, photo or video — with premium emojis — is sent exactly as is.\n\n"
+                "Example: <i>🔥 New update is live! Press /start</i></blockquote>",
                 parse_mode="HTML", reply_markup=admin_back_markup("broadcast"))
 
             def _on_bc(rm):
@@ -8891,11 +8891,11 @@ def callback_handler(call):
             bot.answer_callback_query(call.id)
             prompt = bot.send_message(
                 call.message.chat.id,
-                "<blockquote><b>📝 Welcome Message</b>\n\nNaya /start message bhejo (premium emoji, bold, quote sab chalega).\n\n"
-                "Ye words apne aap user ke hisaab se badal jayenge:\n"
-                "<code>{name}</code> = user ka naam\n<code>{id}</code> = user ID\n<code>{credits}</code> = credits\n\n"
+                "<blockquote><b>📝 Welcome Message</b>\n\nSend a new /start message (premium emoji, bold, quote all work).\n\n"
+                "These tags fill in automatically for each user:\n"
+                "<code>{name}</code> = user's name\n<code>{id}</code> = user ID\n<code>{credits}</code> = credits\n\n"
                 "Example: <i>Hey {name}! Welcome to Villan OSINT Bot. Your credits: {credits}</i>\n\n"
-                "<code>reset</code> bhejo to default wapas.</blockquote>",
+                "Send <code>reset</code> to restore the default.</blockquote>",
                 parse_mode="HTML", reply_markup=admin_back_markup("messages"))
 
             def _on_wm(rm):
@@ -8917,7 +8917,7 @@ def callback_handler(call):
             cid, mid = call.message.chat.id, call.message.message_id
             owner = call.from_user.id == ADMIN_ID
             if call.data != "admin_admins" and not owner:
-                bot.answer_callback_query(call.id, "🔒 Sirf owner admin add/remove kar sakta hai.", True)
+                bot.answer_callback_query(call.id, "🔒 Only the owner can add or remove admins.", True)
                 return
             if call.data == "admin_admins":
                 bot.answer_callback_query(call.id)
@@ -8949,9 +8949,9 @@ def callback_handler(call):
                 back = InlineKeyboardMarkup()
                 back.add(create_primary_button(" Cancel", callback_data="admin_admins", icon_custom_emoji_id=ADMIN_BACK_ICON))
                 edit_with_premium(cid, mid,
-                    "👤 <b>ADD ADMIN</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Pehle naam, phir user ID bhejo.\n"
-                    "Naam mein premium emoji bhi chalega.\n\n<code>Rahul 🔥 123456789</code></blockquote>\n"
-                    "📌 <i>Same ID dobara bhejo to naam update ho jayega.</i>", reply_markup=back)
+                    "👤 <b>ADD ADMIN</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Send the name first, then the user ID.\n"
+                    "The name can include a premium emoji.\n\n<code>Rahul 🔥 123456789</code></blockquote>\n"
+                    "📌 <i>Send the same ID again to update the name.</i>", reply_markup=back)
 
                 def _on_add(rm):
                     if rm.from_user.id != ADMIN_ID or not rm.text or rm.text.startswith("/"):
@@ -8973,7 +8973,7 @@ def callback_handler(call):
                 back = InlineKeyboardMarkup()
                 back.add(create_primary_button(" Cancel", callback_data="admin_pricing", icon_custom_emoji_id=ADMIN_BACK_ICON))
                 edit_with_premium(cid, mid, f"💰 <b>Set {kind.title()} Price</b>\n━━━━━━━━━━━━━━━━━━━━\n"
-                                  "<blockquote>Naya price text bhejo.\n\nExample: <code>₹149 / month</code></blockquote>", reply_markup=back)
+                                  "<blockquote>Send the new price text.\n\nExample: <code>₹149 / month</code></blockquote>", reply_markup=back)
 
                 def _on_price(rm, kind=kind):
                     if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
@@ -9008,7 +9008,7 @@ def callback_handler(call):
                 back.add(create_primary_button(" Cancel", callback_data="admin_protect", icon_custom_emoji_id=ADMIN_BACK_ICON))
                 edit_with_premium(cid, mid, "🔒 <b>ADD PROTECTION</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Bhejo:  "
                                   "<b>user_id  number  days</b>\n\n<code>123456789 9876543210 30</code>\n\n"
-                                  "👤 user_id = jis user ka number hai\n📱 number = protect karna hai\n⏳ days = kitne din (0 = lifetime)</blockquote>",
+                                  "👤 user_id = owner of the number\n📱 number = number to protect\n⏳ days = how many days (0 = lifetime)</blockquote>",
                                   reply_markup=back)
 
                 def _on_prot(rm):
@@ -9052,7 +9052,7 @@ def callback_handler(call):
                                          icon_custom_emoji_id="6138930810692049889"))
             edit_with_premium(call.message.chat.id, call.message.message_id,
                               "<blockquote>🗑 <b>Delete Last Broadcast?</b>\n\nAakhri broadcast sab users "
-                              "aur groups ke chat se hata diya jayega.</blockquote>", reply_markup=mk)
+                              "and group chats.</blockquote>", reply_markup=mk)
             return
 
         if call.data.startswith("admin_delbcid_"):
@@ -9071,8 +9071,8 @@ def callback_handler(call):
             bot.answer_callback_query(call.id)
             prompt = bot.send_message(
                 call.message.chat.id,
-                "<blockquote><b>📝 Join Message</b>\n\nNaya force join message bhejo "
-                "(premium emoji, bold, quote sab chalega).\n<code>reset</code> bhejo to default design wapas.</blockquote>",
+                "<blockquote><b>📝 Join Message</b>\n\nSend a new force-join message "
+                "(premium emoji, bold, quote all work).\nSend <code>reset</code> to restore the default design.</blockquote>",
                 parse_mode="HTML", reply_markup=admin_back_markup("messages"))
 
             def _on_jm(rm):
@@ -9098,8 +9098,8 @@ def callback_handler(call):
             bot.answer_callback_query(call.id)
             prompt = bot.send_message(
                 call.message.chat.id,
-                "<blockquote><b>📢 Broadcast Btn — Step 1/2</b>\n\nWo message bhejo jo sabko jana hai "
-                "(text / photo / video, premium emoji aur quote ke saath).</blockquote>",
+                "<blockquote><b>📢 Broadcast Btn — Step 1/2</b>\n\nSend the message to broadcast "
+                "(text / photo / video, with premium emoji and quote).</blockquote>",
                 parse_mode="HTML", reply_markup=admin_back_markup("broadcast"))
 
             def _bcb_msg(rm):
@@ -9108,9 +9108,9 @@ def callback_handler(call):
                     return
                 p2 = bot.send_message(
                     rm.chat.id,
-                    "<blockquote><b>📢 Broadcast Btn — Step 2/2</b>\n\nAb button bhejo is format mein:\n"
+                    "<blockquote><b>📢 Broadcast Btn — Step 2/2</b>\n\nNow send the button in this format:\n"
                     "<code>Button Text | Link</code>\n\nExample: <code>Join Now | https://t.me/VillanCommunity</code>\n"
-                    "Color bhi de sakte ho: <code>Join Now | https://t.me/VillanCommunity | success</code>\n"
+                    "You can add a color: <code>Join Now | https://t.me/VillanCommunity | success</code>\n"
                     "(primary = blue, success = green, danger = red)</blockquote>",
                     parse_mode="HTML", reply_markup=admin_back_markup("broadcast"))
 
@@ -9151,7 +9151,7 @@ def callback_handler(call):
                 back.add(create_danger_button(" Back", callback_data=f"admin_apiv_{c}",
                                               icon_custom_emoji_id="6138930810692049889"))
                 edit_with_premium(cid, mid,
-                    f"<blockquote>✏️ <b>/{c} — New URL</b>\n\nNaya API URL bhejo. Search value ki jagah "
+                    f"<blockquote>✏️ <b>/{c} — New URL</b>\n\nSend the new API URL. In place of the search value "
                     f"<code>{{query}}</code> likho.\n\nExample:\n<code>https://api.example.com/{c}?q={{query}}</code></blockquote>",
                     reply_markup=back)
 
@@ -9160,7 +9160,7 @@ def callback_handler(call):
                         return
                     url = rm.text.strip()
                     if not url.startswith(("http://", "https://")):
-                        bot.send_message(rm.chat.id, "❌ URL http:// ya https:// se shuru hona chahiye.")
+                        bot.send_message(rm.chat.id, "❌ URL must start with http:// or https://.")
                         return
                     set_api_endpoint(c, url, rm.from_user.id)
                     t2, mk2 = api_detail_view(c)
@@ -9471,7 +9471,7 @@ def contact_export_cmd(message):
         send_with_premium(
             message.chat.id,
             "❌ <b>No verified contacts found.</b>\n"
-            "Abhi tak kisi ne bhi number verify nahi kiya.",
+            "No one has verified a number yet.",
             parse_mode="HTML",
         )
         return
