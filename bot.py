@@ -10206,6 +10206,16 @@ def _sc_wrap(method, fields):
             err = str(e)
             if "Error code: 400" in err and "message is not modified" not in err \
                     and "message to edit not found" not in err and "chat not found" not in err:
+                # Copy buttons work only in private chats: if rejected, resend without them
+                rm_ = kw.get("reply_markup")
+                rows_ = getattr(rm_, "keyboard", None)
+                if rows_ and any(getattr(b, "copy_text", None) for r in rows_ for b in r):
+                    rows_[:] = [r for r in ([b for b in r if not getattr(b, "copy_text", None)] for r in rows_) if r]
+                    print(f"[copy-button fallback] {err[:120]}")
+                    try:
+                        return method(*args, **kw)
+                    except Exception as e2:
+                        err = str(e2)
                 # never lose a message because of a bad premium emoji tag
                 print(f"[premium-emoji fallback] {err[:120]}")
                 txt = kw.get("text") or kw.get("caption") or next((a for a in args if isinstance(a, str) and "<tg-emoji" in a), "")
