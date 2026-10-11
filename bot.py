@@ -4340,19 +4340,20 @@ def format_tgid_result(result, query, credits_left):
         + f"{te(e['tg_title'], '✈️')}  <b>𝗧𝗘𝗟𝗘𝗚𝗥𝗔𝗠 𝗜𝗡𝗙𝗢</b>  {te(e['tg_title'], '✈️')}\n"
         + divider
         + f"\n<blockquote>"
-        + f"{te(e['query'],     '🔭')} <b>Qᴜᴇʀʏ</b>       : <code>{q}</code>\n"
         + f"{te(e['status_ok'],'✅')} <b>Sᴛᴀᴛᴜꜱ</b>      : ᴅᴀᴛᴀ ꜰᴏᴜɴᴅ ✅\n"
-        + f"{te(e['query'],     '🔍')} <b>Tʏᴩᴇ</b>        : {query_type}\n"
+        + (f"{te(e['tgid'], '🆔')} <b>Uꜱᴇʀ ID</b>     : <code>{q}</code>\n" if str(q).isdigit()
+           else f"{te(e['username'], '👤')} <b>Uꜱᴇʀɴᴀᴍᴇ</b>   : @{str(q).lstrip('@')}\n")
         + (f"{te(e['note'],     '💡')} <b>Nᴏᴛᴇ</b>        : {note}\n" if note != "—" else "")
         + f"</blockquote>\n\n"
         + f"<blockquote>"
-        + (f"{te(e['tgid'],    '💳')} <b>TG ID</b>        : <code>{tgid}</code>\n"     if tgid     != "—" else "")
+        + (f"{te(e['tgid'],    '💳')} <b>TG ID</b>        : <code>{tgid}</code>\n"     if tgid not in ("—", str(q)) else "")
         + (f"{te(e['username'],'👤')} <b>Uꜱᴇʀɴᴀᴍᴇ</b>   : @{username}\n"              if username != "—" else "")
         + (f"{te(e['name'],    '📛')} <b>Nᴀᴍᴇ</b>        : {name}\n"                   if name     != "—" else "")
         + f"</blockquote>\n\n"
         + f"<blockquote>"
         + (f"{te(e['phone'],   '📱')} <b>Pʜᴏɴᴇ</b>       : <code>{phone}</code>\n"     if phone    != "—" else "")
-        + (f"{te(e['phone'],   '📱')} <b>Lᴏᴄᴀʟ Nᴜᴍ</b>  : <code>{number}</code>\n"    if number not in ("—", phone) else "")
+        + (f"{te(e['phone'],   '📱')} <b>Lᴏᴄᴀʟ Nᴜᴍ</b>  : <code>{number}</code>\n"
+           if number not in ("—", phone) and not str(phone).endswith(str(number)) else "")
         + (f"{te(e['cc'],      '🔒')} <b>Cᴄ</b>          : {cc}\n"                      if cc       != "—" else "")
         + (f"{te(e['country'], '🌍')} <b>Cᴏᴜɴᴛʀʏ</b>    : {country}\n"                 if country  != "—" else "")
         + f"</blockquote>\n\n"
@@ -9813,7 +9814,8 @@ def _is_result_text(t):
 
 _SC_BACK = {v: k for k, v in zip("abcdefghijklmnopqrstuvwxyz", "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ")}
 _SC_BACK.update({"ᴩ": "p", "ɪ": "i", "ʏ": "y", "ꜱ": "s", "ғ": "f", "ᴏ": "o"})
-_SKIP_COPY = ("left", "speed", "response", "powered", "record", "page", "status", "type", "database")
+_SKIP_COPY = ("left", "speed", "response", "powered", "record", "page", "status", "type", "database",
+              "query", "user id")
 
 
 def _plain_label(lbl):
