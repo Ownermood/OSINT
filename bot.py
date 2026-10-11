@@ -7706,12 +7706,16 @@ def api_list_view(with_back=True):
     on = sum(1 for c in apis if check_api_status(c)[0])
     text = (f"<blockquote>🔗 <b>API Manager</b></blockquote>\n"
             f"<blockquote>✅ Working: <b>{on}</b>   ⛔ Off: <b>{len(apis) - on}</b>\n\n"
-            f"👉 Kisi command pe tap karo — URL dekho, badlo ya ON/OFF karo.</blockquote>")
+            f"👉 Kisi command pe tap karo — URL dekho, badlo ya ON/OFF karo.\n🔵 Blue = working   🔴 Red = off</blockquote>")
     mk = InlineKeyboardMarkup(row_width=3)
     btns = []
     for c in apis:
-        dot = "🟢" if check_api_status(c)[0] else "🔴"
-        btns.append(create_primary_button(f"{dot} /{c}", callback_data=f"admin_apiv_{c}"))
+        if check_api_status(c)[0]:
+            btns.append(create_primary_button(f" /{c}", callback_data=f"admin_apiv_{c}",
+                                              icon_custom_emoji_id="6019175208240289774"))
+        else:
+            btns.append(create_danger_button(f" /{c}", callback_data=f"admin_apiv_{c}",
+                                             icon_custom_emoji_id="6019102674832595118"))
     mk.add(*btns)
     if with_back:
         mk.add(create_danger_button(" Back", callback_data="admin_cat_api", icon_custom_emoji_id="6138930810692049889"))
