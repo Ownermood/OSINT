@@ -8835,7 +8835,8 @@ def _sc_wrap(method, fields):
             return method(*args, **kw)
         except Exception as e:
             err = str(e)
-            if "ENTITY_TEXT_INVALID" in err or "DOCUMENT_INVALID" in err or "can't parse entities" in err:
+            if "Error code: 400" in err and "message is not modified" not in err \
+                    and "message to edit not found" not in err and "chat not found" not in err:
                 # never lose a message because of a bad premium emoji tag
                 print(f"[premium-emoji fallback] {err[:120]}")
                 _apply(args, kw, _strip_tg_emoji)
