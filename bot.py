@@ -1326,8 +1326,16 @@ def deduct_credit(user_id):
 
 FREE_SEARCH_PM = 3       # free searches per day in PM
 FREE_SEARCH_GROUP = 5    # free searches per day in groups
-PLAN_WEEKLY = "₹99 / week"
-PLAN_MONTHLY = "₹199 / month"
+def plan_weekly():
+    return get_setting("price_weekly", "₹99 / week")
+
+
+def plan_monthly():
+    return get_setting("price_monthly", "₹200 / month")
+
+
+def plan_protect():
+    return get_setting("price_protect", "₹200 (one-time)")
 
 _CHARGE_TL = threading.local()
 
@@ -1476,12 +1484,38 @@ def _charge_on_success(fn):
 
 def buy_credit_markup():
     mk = InlineKeyboardMarkup(row_width=1)
-    mk.add(create_success_button(f" Weekly — {PLAN_WEEKLY}", url=f"tg://user?id={ADMIN_ID}",
+    mk.add(create_success_button(f" Weekly — {plan_weekly()}", url=f"tg://user?id={ADMIN_ID}",
                                  icon_custom_emoji_id="6048770006810893912"))
-    mk.add(create_success_button(f" Monthly — {PLAN_MONTHLY}", url=f"tg://user?id={ADMIN_ID}",
+    mk.add(create_success_button(f" Monthly — {plan_monthly()}", url=f"tg://user?id={ADMIN_ID}",
                                  icon_custom_emoji_id="6219727185708582935"))
     mk.add(create_primary_button(" Refer & Earn", callback_data="refer",
                                  icon_custom_emoji_id="5424746868275944727"))
+    return mk
+
+
+def plans_text():
+    D, S, B, R, L = (te("6048770006810893912", "💎"), te("5339247212012528642", "🌟"),
+                     te("6219727185708582935", "👑"), te("5233279094531045380", "🚀"),
+                     te("6019328362479097179", "🔒"))
+    return (
+        f"<blockquote>{D} <b>PREMIUM PLANS</b> {D}\n\n"
+        f"{R} Weekly : <b>{plan_weekly()}</b>\n"
+        f"{B} Monthly : <b>{plan_monthly()}</b>\n\n"
+        f"{L} <b>Protect My Number</b> : <b>{plan_protect()}</b>\n"
+        f"      Aapka number bot ke kisi search mein nahi dikhega.\n\n"
+        f"{S} Niche button dabao aur admin se baat karo.</blockquote>"
+    )
+
+
+def plans_markup():
+    mk = InlineKeyboardMarkup(row_width=1)
+    mk.add(create_success_button(f" Weekly — {plan_weekly()}", url=f"tg://user?id={ADMIN_ID}",
+                                 icon_custom_emoji_id="6048770006810893912"))
+    mk.add(create_success_button(f" Monthly — {plan_monthly()}", url=f"tg://user?id={ADMIN_ID}",
+                                 icon_custom_emoji_id="6219727185708582935"))
+    mk.add(create_primary_button(f" Protect My Number — {plan_protect()}", url=f"tg://user?id={ADMIN_ID}",
+                                 icon_custom_emoji_id="6019328362479097179"))
+    mk.add(create_default_button(" Back", callback_data="back_start", icon_custom_emoji_id="6138930810692049889"))
     return mk
 
 
@@ -1497,8 +1531,8 @@ def send_limit_message(message):
         f"{P} Daily free limit: <b>{FREE_SEARCH_PM}</b> in PM, <b>{FREE_SEARCH_GROUP}</b> in groups\n"
         f"{R} Your free searches reset tomorrow.\n\n"
         f"{F} <b>Want unlimited searches? Pick a plan:</b>\n\n"
-        f"{R} Weekly : <b>{PLAN_WEEKLY}</b>\n"
-        f"{B} Monthly : <b>{PLAN_MONTHLY}</b>\n\n"
+        f"{R} Weekly : <b>{plan_weekly()}</b>\n"
+        f"{B} Monthly : <b>{plan_monthly()}</b>\n\n"
         f"{S} Tap a plan below to contact the admin.</blockquote>"
     )
     if message.chat.type in ("group", "supergroup"):
@@ -5740,6 +5774,8 @@ def start_cmd(message):
         create_primary_button(" Balance", callback_data="balance", icon_custom_emoji_id="6136159783692017451"),
         create_primary_button(" Redeem", callback_data="redeem", icon_custom_emoji_id="6136204644625423818"),
     )
+    markup.add(create_success_button(" Buy Credits / Protect Number", callback_data="buyplans",
+                                     icon_custom_emoji_id="6048770006810893912"))
     markup.add(create_success_button(" Add Bot To Group", url=f"https://t.me/{bot_username}?startgroup=start",
                                      icon_custom_emoji_id="6136525109315245846"))
 
@@ -5961,6 +5997,13 @@ def refer_cmd(message):
         schedule_deletion(sent.message_id, chat_id)
     except Exception as e:
         print(f"Error in refer command: {e}")
+
+@bot.message_handler(commands=['plans', 'buy'])
+def plans_cmd(message):
+    if not is_recent_command(message):
+        return
+    send_with_premium(message.chat.id, plans_text(), reply_markup=plans_markup())
+
 
 @bot.message_handler(commands=['redeem'])
 def redeem_cmd(message):
@@ -6755,6 +6798,7 @@ ADMIN_MENUS = {
         ("Gen Code", "admin_ask_gen", "Credits · users · days → <code>50 10 30</code>", "6136204644625423818"),
         ("All Codes", "admin_run_allcodes", "Saare redeem codes", "6136663351427603393"),
         ("Delete Code", "admin_ask_deletecode", "Send: <code>ABC123XY</code>", "5425036812928164275"),
+        ("Pricing", "admin_pricing", "Plan ke daam badlo (Weekly / Monthly / Protect)", "6136159783692017451"),
     ]),
     "broadcast": ("Broadcast", [
         ("Broadcast", "admin_broadcast_info", "Koi bhi message — premium emoji, quote, photo sab", "6138680877955160519"),
@@ -7043,6 +7087,36 @@ def unprotect_cmd(message):
     send_with_premium(message.chat.id, f"✅ Unprotected: {n}")
 
 
+_PRICE_KEYS = {"weekly": "price_weekly", "monthly": "price_monthly", "protect": "price_protect"}
+
+
+def pricing_view():
+    text = ("💰 <b>PRICING</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>"
+            f"⚡ Weekly  : <b>{plan_weekly()}</b>\n"
+            f"👑 Monthly : <b>{plan_monthly()}</b>\n"
+            f"🔒 Protect : <b>{plan_protect()}</b></blockquote>\n"
+            "📌 <i>Button dabao aur naya text bhejo. Example: <code>₹149 / month</code></i>")
+    mk = InlineKeyboardMarkup(row_width=1)
+    mk.add(create_primary_button(" Set Weekly Price", callback_data="admin_setprice_weekly", icon_custom_emoji_id="6136326046171011765"))
+    mk.add(create_primary_button(" Set Monthly Price", callback_data="admin_setprice_monthly", icon_custom_emoji_id="6219727185708582935"))
+    mk.add(create_primary_button(" Set Protect Price", callback_data="admin_setprice_protect", icon_custom_emoji_id="6019328362479097179"))
+    mk.add(create_danger_button(" Back", callback_data="admin_cat_credits", icon_custom_emoji_id=ADMIN_BACK_ICON))
+    return text, mk
+
+
+@bot.message_handler(commands=['setprice'])
+def setprice_cmd(message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 3 or parts[1].lower() not in _PRICE_KEYS:
+        send_with_premium(message.chat.id, "❌ Use: <code>/setprice weekly ₹99 / week</code>\nTypes: weekly, monthly, protect")
+        return
+    set_setting(_PRICE_KEYS[parts[1].lower()], parts[2].strip())
+    t, mk = pricing_view()
+    send_with_premium(message.chat.id, "✅ Price updated!\n\n" + t, reply_markup=mk)
+
+
 def admin_main_text():
     try:
         st = get_bot_stats()
@@ -7067,7 +7141,7 @@ ADMIN_CMD_HINT = {
     "admin_users": "/users", "admin_protect": "/protect number · /unprotect number", "admin_ask_searchuser": "/searchuser user_id", "admin_block": "/block user_id",
     "admin_unblock": "/unblock user_id",
     "admin_addcredits": "/add user_id amount", "admin_removecredits": "/removecredit user_id amount",
-    "admin_ask_gen": "/gen credits users days", "admin_run_allcodes": "/allcodes", "admin_ask_deletecode": "/deletecode CODE",
+    "admin_ask_gen": "/gen credits users days", "admin_run_allcodes": "/allcodes", "admin_ask_deletecode": "/deletecode CODE", "admin_pricing": "/setprice weekly PRICE",
     "admin_broadcast_info": "/broadcast text  (ya message pe reply)", "admin_bcbtn": "/broadcastbtn Text | link  (message pe reply)",
     "admin_setbc_info": "/setbc channel_id", "admin_run_removebc": "/removebc",
     "admin_run_listc": "/listc", "admin_ask_addc": "/addc", "admin_ask_removec": "/removec link",
@@ -8631,6 +8705,14 @@ def callback_handler(call):
             return
         # ── end leak pagination ─────────────────────────────────
 
+        if call.data == "buyplans":
+            bot.answer_callback_query(call.id)
+            try:
+                edit_with_premium(call.message.chat.id, call.message.message_id, plans_text(), reply_markup=plans_markup())
+            except Exception:
+                send_with_premium(call.message.chat.id, plans_text(), reply_markup=plans_markup())
+            return
+
         if call.data in ("help", "profile", "balance", "refer", "back_start"):
             import copy as _copy
             fm = _copy.copy(call.message)
@@ -8804,6 +8886,30 @@ def callback_handler(call):
 
                 bot.register_next_step_handler_by_chat_id(cid, _on_add)
                 return
+            edit_with_premium(cid, mid, t, reply_markup=mk)
+            return
+
+        if call.data == "admin_pricing" or call.data.startswith("admin_setprice_"):
+            cid, mid = call.message.chat.id, call.message.message_id
+            if call.data.startswith("admin_setprice_"):
+                kind = call.data[len("admin_setprice_"):]
+                bot.answer_callback_query(call.id)
+                back = InlineKeyboardMarkup()
+                back.add(create_primary_button(" Cancel", callback_data="admin_pricing", icon_custom_emoji_id=ADMIN_BACK_ICON))
+                edit_with_premium(cid, mid, f"💰 <b>Set {kind.title()} Price</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+                                  "<blockquote>Naya price text bhejo.\n\nExample: <code>₹149 / month</code></blockquote>", reply_markup=back)
+
+                def _on_price(rm, kind=kind):
+                    if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
+                        return
+                    set_setting(_PRICE_KEYS.get(kind, "price_" + kind), rm.text.strip())
+                    t2, mk2 = pricing_view()
+                    edit_with_premium(cid, mid, "✅ Price updated!\n\n" + t2, reply_markup=mk2)
+
+                bot.register_next_step_handler_by_chat_id(cid, _on_price)
+                return
+            bot.answer_callback_query(call.id)
+            t, mk = pricing_view()
             edit_with_premium(cid, mid, t, reply_markup=mk)
             return
 
