@@ -9761,7 +9761,7 @@ def _sc_wrap(method, fields):
             v = kw.get(f) if f in kw else (args[params.index(f)] if f in params and params.index(f) < len(args) else None)
             if isinstance(v, str) and _is_result_text(v):
                 is_result = True
-        conv = (lambda t: _fix_tg_emoji(sc_all(_copyable_values(t)))) if is_result else (lambda t: _fix_tg_emoji(sc_all(t)))
+        conv = (lambda t: _fix_tg_emoji(sc_all(_add_copy_box(_copyable_values(t))))) if is_result else (lambda t: _fix_tg_emoji(sc_all(t)))
         _apply(args, kw, conv)
         try:
             res = method(*args, **kw)
@@ -9806,6 +9806,42 @@ _VAL_RE = re.compile(r"((?:</b>|[^\S\n])\s*:\s*)([^<\n:][^<\n]*?)(\s*)$", re.M)
 
 def _is_result_text(t):
     return any(m in t for m in _RESULT_MARKERS)
+
+
+_SC_BACK = {v: k for k, v in zip("abcdefghijklmnopqrstuvwxyz", "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ")}
+_SC_BACK.update({"ᴩ": "p", "ɪ": "i", "ʏ": "y", "ꜱ": "s", "ғ": "f", "ᴏ": "o"})
+_SKIP_COPY = ("left", "speed", "response", "powered", "record", "page", "status", "type", "database")
+
+
+def _plain_label(lbl):
+    import html as _h
+    lbl = _h.unescape(re.sub(r"<[^>]+>", "", lbl))
+    lbl = "".join(_SC_BACK.get(c, c) for c in lbl)
+    lbl = re.sub(r"[^\w\s./()-]", "", lbl).strip()
+    return lbl[:1].upper() + lbl[1:].lower() if lbl else lbl
+
+
+def _add_copy_box(t):
+    """Append one code block with every 'Label : value' line → Telegram shows a Copy button."""
+    if "<pre>" in t:
+        return t
+    import html as _h
+    rows = []
+    for line in t.split("\n"):
+        m = re.match(r"^(.*?)\s*:\s*(.+)$", re.sub(r"<tg-emoji[^>]*>.*?</tg-emoji>", "", line))
+        if not m:
+            continue
+        lbl = _plain_label(m.group(1))
+        val = _h.unescape(re.sub(r"<[^>]+>", "", m.group(2))).strip()
+        if not lbl or not val or val in ("—", "-", "N/A", "None") or any(x in lbl.lower() for x in _SKIP_COPY):
+            continue
+        rows.append(f"{lbl:<10}: {val}")
+    if len(rows) < 2:
+        return t
+    box = "\n".join(rows).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    out = t.rstrip() + f"\n📋 <b>Copy all</b>\n<pre>{box}</pre>"
+    visible = _h.unescape(re.sub(r"<[^>]+>", "", out))   # Telegram counts visible text, not HTML
+    return out if len(visible) < 4000 else t
 
 
 def _copyable_values(t):
@@ -9870,8 +9906,15 @@ def _fix_tg_emoji(text):
     def chk(m):
         eid, inner = m.group(1), m.group(2)
         bad = (not inner.strip()) or any(c.isalnum() or c in "<>" for c in inner) or len(inner) > 12 \
-            or not is_real_emoji(inner) or eid in _BAD_EMOJI_IDS
-        return inner if bad else m.group(0)
+            or not is_real_emoji(inner)
+        if bad:
+            return inner
+        if eid in _BAD_EMOJI_IDS:
+            alt = premium_id_for(inner)
+            if not alt or alt in _BAD_EMOJI_IDS:
+                alt = next((i for i in OWNER_EMOJI_IDS if i not in _BAD_EMOJI_IDS), None)
+            return f'<tg-emoji emoji-id="{alt}">{inner}</tg-emoji>' if alt else inner
+        return m.group(0)
     return _TG_EMOJI_ID_RE.sub(chk, text)
 
 
