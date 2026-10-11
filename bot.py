@@ -9380,9 +9380,7 @@ def callback_handler(call):
                 st["code"] = c
                 st.update(step="credits", cur="", cid=cid, mid=mid, s3=s3)
                 _RKP[rm.from_user.id] = st
-                t, kp = redeem_keypad(st)
-                edit_with_premium(cid, mid, t, reply_markup=kp)
-                bot.register_next_step_handler_by_chat_id(cid, s2)
+                ask(f"Code: <code>{c}</code>\n\n<b>Step 2:</b> how many credits per claim? Type the number, e.g. <code>10</code>", s2)
 
             def s2(rm):
                 if _bad(rm):
@@ -9390,7 +9388,7 @@ def callback_handler(call):
                 if _RKP.get(rm.from_user.id) is not st or st.get("step") != "credits":
                     return   # already done with the keypad
                 if not rm.text.strip().isdigit() or int(rm.text) <= 0:
-                    bot.register_next_step_handler_by_chat_id(cid, s2)
+                    ask("❌ Send a number above 0.\n\n<b>Step 2:</b> credits per claim, e.g. <code>10</code>", s2)
                     return
                 st["credits"] = int(rm.text)
                 st.update(step="max", cur="")
