@@ -5600,15 +5600,16 @@ def start_cmd(message):
 
     markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
-        create_primary_button(" Help", callback_data="help", icon_custom_emoji_id="5298773244101281960"),
-        create_primary_button(" Profile", callback_data="profile", icon_custom_emoji_id="5424746868275944727"),
-        create_primary_button(" Balance", callback_data="balance", icon_custom_emoji_id="6048770006810893912"),
-        create_success_button(" Redeem", callback_data="redeem", icon_custom_emoji_id="6219727185708582935"),
+        create_primary_button(" Help", callback_data="help", icon_custom_emoji_id="5424700761802023186"),
+        create_primary_button(" Profile", callback_data="profile", icon_custom_emoji_id="5424663180838182778"),
+        create_primary_button(" Balance", callback_data="balance", icon_custom_emoji_id="6136159783692017451"),
+        create_primary_button(" Redeem", callback_data="redeem", icon_custom_emoji_id="6136204644625423818"),
     )
-    markup.add(create_success_button("➕ ADD BOT TO GROUP", url=f"https://t.me/{bot_username}?startgroup=start"))
+    markup.add(create_success_button(" Add Bot To Group", url=f"https://t.me/{bot_username}?startgroup=start",
+                                     icon_custom_emoji_id="6136525109315245846"))
 
     if is_admin(user_id):
-        markup.add(create_danger_button(" Admin Panel", callback_data="admin_panel", icon_custom_emoji_id="5339247212012528642"))
+        markup.add(create_danger_button(" Admin Panel", callback_data="admin_panel", icon_custom_emoji_id="6136231213293116410"))
 
     if message.chat.type != "private":
         markup = None  # groups: commands only, buttons only in PM
@@ -5718,7 +5719,8 @@ def help_cmd(message):
     )
 
     markup = InlineKeyboardMarkup()
-    markup.add(create_success_button("➕ ADD BOT TO GROUP", url=f"https://t.me/{bot_username}?startgroup=start"))
+    markup.add(create_success_button(" Add Bot To Group", url=f"https://t.me/{bot_username}?startgroup=start",
+                                     icon_custom_emoji_id="6136525109315245846"))
 
     try:
         sent = send_with_premium(chat_id, msg, parse_mode='HTML', reply_markup=markup)
