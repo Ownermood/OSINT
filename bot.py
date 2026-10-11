@@ -1557,8 +1557,8 @@ def get_all_group_chats():
 
 DEFAULT_FORCE_CHANNELS = [
     ("https://t.me/VillanCommunity", "-1004443904846", "Villan Community"),
-    ("https://t.me/VillanSupport", "-1004293604271", "Villain Sell Log"),
-    ("https://t.me/+JCEpc-yLmM5kYTll", "-1004312463146", "Villan Search GC"),
+    ("https://t.me/VillanSupport", "-1004293604271", "Villan Search GC"),
+    ("https://t.me/+JCEpc-yLmM5kYTll", "-1004312463146", "Villain Sell Log"),
 ]
 _OLD_DEFAULT_CHANNELS = ["bynxgc", "Osintxarmy", "OSINT_BY_NX"]
 
@@ -1571,6 +1571,11 @@ def load_channels_from_db():
         # drop duplicate entries of our channels that point to another link
         for _u, _n, _nm in DEFAULT_FORCE_CHANNELS:
             _col_channels.delete_many({"username": _n, "url": {"$ne": _u}})
+        # one-time fix: names were swapped earlier
+        _col_channels.update_one({"username": "-1004293604271", "name": "Villain Sell Log"},
+                                 {"$set": {"name": "Villan Search GC"}})
+        _col_channels.update_one({"username": "-1004312463146", "name": "Villan Search GC"},
+                                 {"$set": {"name": "Villain Sell Log"}})
         for _u, _n, _nm in DEFAULT_FORCE_CHANNELS:
             try:
                 _col_channels.update_one({"username": _n, "name": {"$exists": False}},
