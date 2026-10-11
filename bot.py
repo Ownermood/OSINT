@@ -6314,6 +6314,57 @@ def admin_panel(message):
         create_primary_button("🖼 Add Media",     callback_data="admin_addmedia",    icon_custom_emoji_id="5008416661569536895"),
     )
     markup.add(
+        create_primary_button("🎟 Gen Code",      callback_data="admin_ask_gen"),
+        create_primary_button("📜 All Codes",     callback_data="admin_run_allcodes"),
+    )
+    markup.add(
+        create_danger_button( "❌ Delete Code",   callback_data="admin_ask_deletecode"),
+        create_primary_button("🔍 Search User",   callback_data="admin_ask_searchuser"),
+    )
+    markup.add(
+        create_danger_button( "🔒 Lock Bot",      callback_data="admin_run_lock"),
+        create_success_button("🔓 Unlock Bot",    callback_data="admin_run_unlock"),
+    )
+    markup.add(
+        create_primary_button("📢 Broadcast Btn", callback_data="admin_ask_broadcastbtn"),
+        create_danger_button( "📡 Remove BC",     callback_data="admin_run_removebc"),
+    )
+    markup.add(
+        create_success_button("➕ Add Channel",   callback_data="admin_ask_addc"),
+        create_danger_button( "➖ Remove Channel",callback_data="admin_ask_removec"),
+    )
+    markup.add(
+        create_primary_button("📋 List Channels", callback_data="admin_run_listc"),
+        create_primary_button("🔗 List APIs",     callback_data="admin_run_api"),
+    )
+    markup.add(
+        create_primary_button("✏️ Change API",    callback_data="admin_ask_apic"),
+        create_primary_button("⚙️ Set Mode",      callback_data="admin_ask_setmode"),
+    )
+    markup.add(
+        create_danger_button( "🔒 Lock Force Join",  callback_data="admin_run_lockf"),
+        create_success_button("🔓 Unlock Force Join",callback_data="admin_run_unlockf"),
+    )
+    markup.add(
+        create_primary_button("🎬 Add Video",     callback_data="admin_run_addvideo"),
+        create_primary_button("🖼 Add Photo",     callback_data="admin_run_addphoto"),
+    )
+    markup.add(
+        create_success_button("✅ Done Media",    callback_data="admin_run_done"),
+        create_primary_button("⏱ Uptime",        callback_data="admin_run_uptime"),
+    )
+    markup.add(
+        create_primary_button("🎞 List Videos",   callback_data="admin_run_listvideos"),
+        create_primary_button("🖼 List Photos",   callback_data="admin_run_listphotos"),
+    )
+    markup.add(
+        create_danger_button( "🗑 Delete Video",  callback_data="admin_run_delvideo"),
+        create_danger_button( "🗑 Delete Photo",  callback_data="admin_run_delphoto"),
+    )
+    markup.add(
+        create_primary_button("📈 Command Stats", callback_data="admin_run_commands"),
+    )
+    markup.add(
         create_danger_button("🔄 Reload Bot",     callback_data="admin_reload",       icon_custom_emoji_id="5370754155793102519"),
     )
 
@@ -7714,6 +7765,47 @@ def callback_handler(call):
                 fn(rm)
 
             bot.register_next_step_handler(prompt, _on_reply)
+            return
+
+        _cmd_fn = {
+            "gen": (gen_code_cmd, "credits max_uses days (e.g. 50 10 30)"),
+            "allcodes": (all_codes_cmd, None), "deletecode": (delete_code_cmd, "code"),
+            "searchuser": (search_user_cmd, "user_id or username"),
+            "lock": (lock_bot_cmd, None), "unlock": (unlock_bot_cmd, None),
+            "broadcastbtn": (broadcast_btn_cmd, "broadcast text"),
+            "removebc": (removebc_cmd, None),
+            "addc": (add_channel_cmd, "channel username / link"),
+            "removec": (remove_channel_cmd, "channel username / link"),
+            "listc": (list_channels_cmd, None), "api": (list_apis_cmd, None),
+            "apic": (change_api_cmd, "command api_url"),
+            "setmode": (set_mode_cmd, "video / photo / both"),
+            "lockf": (lock_force_join_cmd, None), "unlockf": (unlock_force_join_cmd, None),
+            "addvideo": (add_video_cmd, None), "addphoto": (add_photo_cmd, None),
+            "done": (done_adding_media, None), "uptime": (uptime_cmd, None),
+            "listvideos": (list_videos_cmd, None), "listphotos": (list_photos_cmd, None),
+            "delvideo": (del_video_cmd, None), "delphoto": (del_photo_cmd, None),
+            "commands": (commands_stats_cmd, None),
+        }
+        if call.data.startswith(("admin_run_", "admin_ask_")):
+            cmd = call.data[10:]
+            if cmd not in _cmd_fn:
+                bot.answer_callback_query(call.id, "❌ Unknown action", True)
+                return
+            fn, hint = _cmd_fn[cmd]
+            bot.answer_callback_query(call.id)
+            if call.data.startswith("admin_run_") or not hint:
+                fn(_cb_msg("/" + cmd))
+                return
+            prompt = bot.send_message(call.message.chat.id, f"✏️ Send <b>{hint}</b> (or /cancel):", parse_mode="HTML")
+
+            def _on_cmd_reply(rm, fn=fn, cmd=cmd):
+                if not rm.text or rm.text.startswith("/cancel") or not is_admin(rm.from_user.id):
+                    bot.send_message(rm.chat.id, "❌ Cancelled.")
+                    return
+                rm.text = f"/{cmd} {rm.text.strip()}"
+                fn(rm)
+
+            bot.register_next_step_handler(prompt, _on_cmd_reply)
             return
 
         _admin_usage = {
