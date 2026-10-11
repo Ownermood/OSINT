@@ -4,6 +4,7 @@ from pymongo.errors import DuplicateKeyError
 import json
 import time
 import re
+import html as _html_mod
 import logging
 import os
 import sys
@@ -1748,14 +1749,60 @@ def redeem_credits(user_id, code):
         if r.modified_count != 1:
             _col_code_usage.delete_one({"code": code, "user_id": user_id})
             return False, "This code has expired — all claims are used up."
-        # 3) credit
+        # 3) credit — if this fails, give the claim back so the code is not lost
         credits = doc["credits"]
-        _col_users.update_one({"user_id": user_id}, {"$inc": {"credits": credits}})
+        try:
+            if _col_users.update_one({"user_id": user_id}, {"$inc": {"credits": credits}}).matched_count != 1:
+                raise RuntimeError("user row missing")
+        except Exception as ce:
+            print(f"Redeem credit failed, rolling back: {ce}")
+            _col_codes.update_one({"code": code}, {"$inc": {"used_count": -1}})
+            _col_code_usage.delete_one({"code": code, "user_id": user_id})
+            return False, "Something went wrong — your code was NOT used. Please try again."
+        threading.Thread(target=_after_redeem, args=(code, user_id, credits), daemon=True).start()
         new_balance = get_credits(user_id)
         return True, f"Successfully redeemed {credits} credits! New balance: {new_balance}"
     except Exception as e:
         print(f"Redeem error: {e}")
         return False, "Something went wrong. Please try again."
+
+def _mask_code(code):
+    return code[:3] + "•" * max(0, len(code) - 3)
+
+
+def _after_redeem(code, user_id, credits):
+    """Claim log in the log channel (code hidden) + alert the admin when a code is used up."""
+    try:
+        doc = _col_codes.find_one({"code": code}) or {}
+        used, mx = doc.get("used_count", 0), doc.get("max_uses", 0)
+        u = _col_users.find_one({"user_id": user_id}) or {}
+        name = _html_mod.escape(str(u.get("first_name") or u.get("name") or "User"))
+        chat = get_setting("redeem_log_chat")
+        if chat:
+            try:
+                send_with_premium(chat,
+                    f"🎟 <b>CODE REDEEMED</b>\n"
+                    f"<blockquote>👤 User : <a href=\"tg://user?id={user_id}\">{name}</a>\n"
+                    f"🔑 Code : <code>{_mask_code(code)}</code>\n"
+                    f"💰 Credits : <b>+{credits}</b>\n"
+                    f"👥 Claimed : <b>{used}/{mx}</b></blockquote>")
+            except Exception as e:
+                print(f"redeem log: {e}")
+        if mx and used >= mx:
+            for aid in {ADMIN_ID, doc.get("created_by")}:
+                if not aid:
+                    continue
+                try:
+                    send_with_premium(aid,
+                        f"⚠️ <b>REDEEM CODE USED UP</b>\n"
+                        f"<blockquote>🎟 Code : <code>{code}</code>\n💰 {doc.get('credits', 0)} credits each\n"
+                        f"👥 Claimed : <b>{used}/{mx}</b> — all claims used</blockquote>\n"
+                        f"<i>Create a new one from Admin Panel → Redeem Codes.</i>")
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"_after_redeem: {e}")
+
 
 def create_redeem_code(code, credits, max_uses, expiry_date, admin_id):
     try:
@@ -6078,6 +6125,16 @@ def plans_cmd(message):
     send_with_premium(message.chat.id, plans_text(), reply_markup=plans_markup())
 
 
+def redeem_result_markup(failed):
+    mk = InlineKeyboardMarkup(row_width=2)
+    if failed:
+        mk.add(create_primary_button(" Try Again", callback_data="redeem", icon_custom_emoji_id="6136204644625423818"),
+               create_danger_button(" Home", callback_data="back_start", icon_custom_emoji_id="6138930810692049889"))
+    else:
+        mk.add(create_danger_button(" Home", callback_data="back_start", icon_custom_emoji_id="6138930810692049889"))
+    return mk
+
+
 @bot.message_handler(commands=['redeem'])
 def redeem_cmd(message):
     if not is_recent_command(message):
@@ -6124,7 +6181,7 @@ def redeem_cmd(message):
 ✨ Use /profile to see your stats"""
 
         try:
-            edit_with_premium(chat_id, wait_msg.message_id, final_msg)
+            edit_with_premium(chat_id, wait_msg.message_id, final_msg, reply_markup=redeem_result_markup(False))
         except:
             bot.delete_message(chat_id, wait_msg.message_id)
             send_with_premium(chat_id, final_msg)
@@ -6143,7 +6200,7 @@ def redeem_cmd(message):
 📞 Contact admin: {OWNER_USERNAME}"""
 
         try:
-            edit_with_premium(chat_id, wait_msg.message_id, final_msg)
+            edit_with_premium(chat_id, wait_msg.message_id, final_msg, reply_markup=redeem_result_markup(True))
         except:
             bot.delete_message(chat_id, wait_msg.message_id)
             send_with_premium(chat_id, final_msg)
@@ -7251,9 +7308,9 @@ def _code_line(d):
     used, mx = d.get("used_count", 0), d.get("max_uses", 0)
     exp = d.get("expiry_date")
     expired = bool(exp) and datetime.strptime(exp, "%Y-%m-%d %H:%M:%S") < datetime.now()
-    state = "used up" if used >= mx else ("expired" if expired else "")
-    ok = "✅" if not state else "⚠️"
-    tail = f" · {state}" if state else ""
+    state = "Used up" if used >= mx else ("Expired" if expired else "")
+    ok = "✅" if not state else "⛔"
+    tail = f" · ⛔ {state}" if state else " · ✅ Active"
     exp_s = f"\n⏳ Expires: {exp[:10]}" if exp else ""
     return (f"🎟 Code: <code>{d['code']}</code>\n💰 Amount: <b>{d.get('credits', 0)} credits</b>\n"
             f"{ok} Claimed: <b>{used}/{mx}</b>{tail}{exp_s}")
@@ -7282,8 +7339,44 @@ def codes_view():
                create_danger_button(f" Delete {d['code']}", callback_data=f"admin_codedel_{d['code']}",
                                     icon_custom_emoji_id="6019102674832595118"))
     mk.add(create_primary_button(" New Code", callback_data="admin_codenew", icon_custom_emoji_id="6136204644625423818"))
+    lc = get_setting("redeem_log_chat")
+    mk.add((create_success_button if lc else create_primary_button)(
+        f" Claim Log: {lc}" if lc else " Set Claim Log Channel", callback_data="admin_codelog",
+        icon_custom_emoji_id="6138680877955160519"))
     mk.add(create_danger_button(" Back", callback_data="admin_cat_credits", icon_custom_emoji_id=ADMIN_BACK_ICON))
     return text, mk
+
+
+def redeem_keypad(st):
+    """Number pad for max users."""
+    cur = st.get("cur", "")
+    text = (f"🎟 <b>CREATE REDEEM CODE</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+            f"<blockquote>Code: <code>{st['code']}</code> · {st['credits']} credits\n\n"
+            f"<b>Step 3:</b> how many users can claim?\n\n👥 Max users : <b>{cur or '0'}</b></blockquote>\n"
+            f"<i>Tap the numbers, then Done. (You can also type the number.)</i>")
+    mk = InlineKeyboardMarkup(row_width=3)
+    for row in (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9")):
+        mk.row(*[create_primary_button(f" {n}", callback_data=f"admin_rkp_{n}") for n in row])
+    mk.row(create_danger_button(" Delete", callback_data="admin_rkp_del", icon_custom_emoji_id=ADMIN_BACK_ICON),
+           create_primary_button(" 0", callback_data="admin_rkp_0"),
+           create_success_button(" Done", callback_data="admin_rkp_ok", icon_custom_emoji_id="6019175208240289774"))
+    mk.row(create_danger_button(" Cancel", callback_data="admin_codes", icon_custom_emoji_id=ADMIN_BACK_ICON))
+    return text, mk
+
+
+_RKP = {}   # admin id → draft code waiting for the keypad
+
+
+def finish_redeem_code(st, admin_id, cid, mid):
+    _RKP.pop(admin_id, None)
+    ok, m = create_redeem_code(st["code"], st["credits"], st["max"], None, admin_id)
+    t, mk = codes_view()
+    if ok:
+        mk.keyboard.insert(0, [_copy_btn(f" Copy Code: {st['code']}", st["code"])])
+    done = (f"✅ <b>Code created!</b>\n<blockquote>🎟 <code>{st['code']}</code>\n💰 {st['credits']} credits · "
+            f"👥 {st['max']} users\n\nUsers redeem with: <code>/redeem {st['code']}</code></blockquote>\n"
+            f"📌 <i>Tap the code or the Copy button to copy it.</i>\n\n") if ok else f"❌ {m}\n\n"
+    edit_with_premium(cid, mid, done + t, reply_markup=mk)
 
 
 def admin_main_text():
@@ -9154,6 +9247,64 @@ def callback_handler(call):
             edit_with_premium(cid, mid, t, reply_markup=mk)
             return
 
+        if call.data.startswith("admin_rkp_"):
+            st = _RKP.get(call.from_user.id)
+            if not st:
+                bot.answer_callback_query(call.id, "This screen expired. Tap New Code again.", True)
+                return
+            v = call.data[len("admin_rkp_"):]
+            if v == "del":
+                st["cur"] = st["cur"][:-1]
+            elif v == "ok":
+                if int(st["cur"] or 0) < 1:
+                    bot.answer_callback_query(call.id, "❌ Enter at least 1 user.", True)
+                    return
+                bot.answer_callback_query(call.id, "Created")
+                bot.clear_step_handler_by_chat_id(st["cid"])
+                st["max"] = int(st["cur"])
+                finish_redeem_code(st, call.from_user.id, st["cid"], st["mid"])
+                return
+            else:
+                st["cur"] = (st["cur"] + v).lstrip("0")[:6]
+            bot.answer_callback_query(call.id)
+            t, kp = redeem_keypad(st)
+            try:
+                edit_with_premium(st["cid"], st["mid"], t, reply_markup=kp)
+            except Exception:
+                pass
+            return
+
+        if call.data == "admin_codelog":
+            bot.answer_callback_query(call.id)
+            cid, mid = call.message.chat.id, call.message.message_id
+            back = InlineKeyboardMarkup()
+            back.add(create_danger_button(" Back", callback_data="admin_codes", icon_custom_emoji_id=ADMIN_BACK_ICON))
+            edit_with_premium(cid, mid,
+                "<blockquote>📢 <b>CLAIM LOG CHANNEL</b>\n\nEvery redeemed code is posted here (code hidden like "
+                "<code>DIW•••••</code>).\n\nSend the channel ID or @username, e.g. <code>-1001234567890</code>\n"
+                "Send <code>off</code> to stop the log.\n\n⚠️ Add the bot to the channel as admin first.</blockquote>",
+                reply_markup=back)
+
+            def _on_log(rm):
+                if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
+                    return
+                v = rm.text.strip()
+                if v.lower() == "off":
+                    set_setting("redeem_log_chat", None)
+                    note = "✅ Claim log turned off.\n\n"
+                else:
+                    try:
+                        bot.send_message(v, "✅ Redeem claim log connected.")
+                        set_setting("redeem_log_chat", v)
+                        note = f"✅ Claim log set to <code>{_html_mod.escape(v)}</code>\n\n"
+                    except Exception as e:
+                        note = f"❌ Could not post there — add the bot as admin and try again.\n<code>{_html_mod.escape(str(e)[:120])}</code>\n\n"
+                t2, mk2 = codes_view()
+                edit_with_premium(cid, mid, note + t2, reply_markup=mk2)
+
+            bot.register_next_step_handler_by_chat_id(cid, _on_log)
+            return
+
         if call.data == "admin_codenew":
             cid, mid = call.message.chat.id, call.message.message_id
             bot.answer_callback_query(call.id)
@@ -9191,7 +9342,11 @@ def callback_handler(call):
                     ask("❌ Send a number above 0.\n\n<b>Step 2:</b> credits per claim, e.g. <code>10</code>", s2)
                     return
                 st["credits"] = int(rm.text)
-                ask(f"Code: <code>{st['code']}</code> · {st['credits']} credits\n\n<b>Step 3:</b> how many users can claim? e.g. <code>10</code>", s3)
+                st.update(cur="", cid=cid, mid=mid)
+                _RKP[rm.from_user.id] = st
+                t, kp = redeem_keypad(st)
+                edit_with_premium(cid, mid, t, reply_markup=kp)
+                bot.register_next_step_handler_by_chat_id(cid, s3)
 
             def s3(rm):
                 if _bad(rm):
@@ -9199,16 +9354,11 @@ def callback_handler(call):
                 if not rm.text.strip().isdigit() or int(rm.text) <= 0:
                     ask("❌ Send a number above 0.\n\n<b>Step 3:</b> max claims, e.g. <code>10</code>", s3)
                     return
+                if _RKP.get(rm.from_user.id) is not st:
+                    return   # already finished with the keypad
                 st["max"] = int(rm.text)
                 # no expiry date: the code ends when all claims are used
-                ok, m = create_redeem_code(st["code"], st["credits"], st["max"], None, rm.from_user.id)
-                t, mk = codes_view()
-                if ok:
-                    mk.keyboard.insert(0, [_copy_btn(f" Copy Code: {st['code']}", st["code"])])
-                done = (f"✅ <b>Code created!</b>\n<blockquote>🎟 <code>{st['code']}</code>\n💰 {st['credits']} credits · "
-                        f"👥 {st['max']} users\n\nUsers redeem with: <code>/redeem {st['code']}</code></blockquote>\n"
-                        f"📌 <i>Tap the code or the Copy button to copy it.</i>\n\n") if ok else f"❌ {m}\n\n"
-                edit_with_premium(cid, mid, done + t, reply_markup=mk)
+                finish_redeem_code(st, rm.from_user.id, cid, mid)
 
             ask("<b>Step 1:</b> send the code, e.g. <code>DIWALI100</code>\n<b>Random:</b> send <code>auto</code> for a random code\n\n"
                 "<i>Letters and numbers only, 3–20 characters.</i>", s1)
