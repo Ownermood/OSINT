@@ -731,8 +731,8 @@ class SimpleCache:
         self.timestamps.clear()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "PASTE_YOUR_BOT_TOKEN_HERE")   # ← BOT TOKEN YAHAN DALO
-ADMIN_ID = int(os.getenv("ADMIN_ID", "8994408644"))
-OWNER_USERNAME = os.getenv("OWNER_USERNAME", "@flirts_x")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "8403136097"))
+OWNER_USERNAME = os.getenv("OWNER_USERNAME", "Admin")
 
 # ── Channel Broadcast Feature ──────────────────────────────────
 # Set this to your channel's chat_id (negative number, e.g. -1001234567890)
@@ -1304,9 +1304,29 @@ def get_all_group_chats():
         print(f"Error fetching group chats: {e}")
         return []
 
+DEFAULT_FORCE_CHANNELS = [
+    ("https://t.me/VillanCommunity", "-1004443904846"),
+    ("https://t.me/VillanSupport", "-1004293604271"),
+    ("https://t.me/+JCEpc-yLmM5kYTll", "-1004312463146"),
+]
+_OLD_DEFAULT_CHANNELS = ["bynxgc", "Osintxarmy", "OSINT_BY_NX"]
+
+
 def load_channels_from_db():
     global PROMOTION_CHANNELS
     try:
+        # remove old repo channels, make sure our channels exist
+        _col_channels.delete_many({"username": {"$in": _OLD_DEFAULT_CHANNELS}})
+        for _u, _n in DEFAULT_FORCE_CHANNELS:
+            try:
+                _col_channels.update_one(
+                    {"username": _n},
+                    {"$set": {"url": _u, "enabled": 1, "is_private": 1},
+                     "$setOnInsert": {"added_by": ADMIN_ID,
+                                      "added_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}},
+                    upsert=True)
+            except DuplicateKeyError:
+                pass
         docs = list(_col_channels.find({"enabled": 1}))
         if docs:
             PROMOTION_CHANNELS = [{
@@ -1317,11 +1337,7 @@ def load_channels_from_db():
                 "join_by_request": bool(d.get("join_by_request", 0)),
             } for d in docs]
         else:
-            default_channels = [
-                ("https://t.me/bynxgc", "bynxgc", True),
-                ("https://t.me/Osintxarmy", "Osintxarmy", True),
-                ("https://t.me/osint_by_nx", "OSINT_BY_NX", True)
-            ]
+            default_channels = [(u, n, True) for u, n in DEFAULT_FORCE_CHANNELS]
             for url, username, enabled in default_channels:
                 try:
                     _col_channels.insert_one({
@@ -1493,6 +1509,7 @@ def _enforce_verify_gate(message):
     PVT : shows contact-share button via send_contact_verification_prompt().
     Admin/owner skip always.
     """
+    return True  # contact verification disabled — only force join is required
     uid     = message.from_user.id
     chat_id = message.chat.id
 
@@ -1777,7 +1794,7 @@ def clean_text(text):
         text = text.replace("@DEVELOPERSTAKEBOT", "").strip()
         text = text.replace("@ and @TATANIUM_ANSH", "@ftgamer2")
         text = text.replace("@InvalidAyush", "").strip()
-        text = text.replace("InvalidAyush", "ㅤ⏤͟͟͞͞𝗙ʟɪʀᴛ𝗫ᴏ").strip()
+        text = text.replace("InvalidAyush", "").strip()
         text = text.replace("developer", "⏤͟͟͞͞𝗦ᴀ𝗛ɪ𝗟").strip()
         text = text.replace("Developer", "⏤͟͟͞͞𝗦ᴀ𝗛ɪ𝗟").strip()
         text = text.replace("@InvalidAyush ❤️🔥⚡", "⏤͟͟͞͞𝗦ᴀ𝗛ɪ𝗟 ❤️🔥⚡").strip()
@@ -1785,7 +1802,7 @@ def clean_text(text):
         words = text.split()
         cleaned_words = []
         for word in words:
-            if word.startswith('@') and word not in ['@ftgamer2', '@BMW_AURA0', '@flirts_x']:
+            if word.startswith('@') and word not in ['@ftgamer2', '@BMW_AURA0']:
                 continue
             cleaned_words.append(word)
         return ' '.join(cleaned_words)
@@ -1805,8 +1822,6 @@ def clean_dict(data):
                 cleaned[key] = [clean_dict(item) if isinstance(item, dict) else (clean_text(item) if isinstance(item, str) else item) for item in value]
             else:
                 cleaned[key] = value
-        cleaned['developer'] = 'ㅤ⏤͟͟͞͞𝗙ʟɪʀᴛ𝗫ᴏ'
-        cleaned['contact'] = 'http://t.me/flirts_x'
         return cleaned
     elif isinstance(data, list):
         return [clean_dict(item) if isinstance(item, dict) else (clean_text(item) if isinstance(item, str) else item) for item in data]
@@ -1959,8 +1974,6 @@ def call_tg_api(query):
             "country":      country,
             "country_code": cc,
             "msg":          "Details fetched",
-            "provided_by":  "ㅤ⏤͟͟͞͞𝗙ʟɪʀᴛ𝗫ᴏ",
-            "telegram":     "@flirts_x",
         }
 
     def _parse_old_api(data, original_query):
@@ -1991,8 +2004,6 @@ def call_tg_api(query):
             "country":      str(data.get("country") or "N/A"),
             "country_code": str(data.get("country_code") or "N/A"),
             "msg":          msg or "Details fetched",
-            "provided_by":  "ㅤ⏤͟͟͞͞𝗙ʟɪʀᴛ𝗫ᴏ",
-            "telegram":     "@flirts_x",
         }
 
     # ── Attempt 1: felix (tg_id numeric only) ─────────────────────
@@ -2020,8 +2031,6 @@ def call_tg_api(query):
                         "country":      str(data_felix.get("country", "N/A")).strip(),
                         "country_code": cc_f,
                         "msg":          msg_f or "Details fetched",
-                        "provided_by":  "ㅤ⏤͟͟͞͞𝗙ʟɪʀᴛ𝗫ᴏ",
-                        "telegram":     "@flirts_x",
                     }
         except Exception as e_f:
             print(f"[TGID] felix error: {e_f}")
@@ -2081,8 +2090,6 @@ def call_tg_api(query):
                         "country":      str(data4.get("country") or data4.get("c") or "N/A"),
                         "country_code": str(data4.get("country_code") or data4.get("cc") or "N/A"),
                         "msg":          msg or "Details fetched",
-                        "provided_by":  "ㅤ⏤͟͟͞͞𝗙ʟɪʀᴛ𝗫ᴏ",
-                        "telegram":     "@flirts_x",
                     }
     except Exception as e4:
         print(f"[TGID] Attempt 4 error: {e4}")
@@ -5169,7 +5176,7 @@ def start_cmd(message):
         return
 
     # ── STEP 2: Captcha gate — skip for admins / bot owner ───────
-    if not is_admin(user_id) and not _is_contact_verified(user_id):
+    if False:  # contact verification disabled
         # Save referral so it survives the contact gate redirect
         ref_val = extract_referral(message.text)
         _save_pending_ref(user_id, ref_val)
@@ -5266,7 +5273,6 @@ def start_cmd(message):
         f"/balance - Cʜᴇᴄᴋ ᴄʀᴇᴅɪᴛꜱ\n"
         f"/refer - Rᴇꜰᴇʀʀᴀʟ ᴄʀᴇᴅɪᴛꜱ\n"
         f"/help - Aʟʟ ᴄᴏᴍᴍᴀɴᴅꜱ\n\n"
-        f"{_s(STAR1,'🌟')} <b>Oᴡɴᴇʀ</b>: {OWNER_USERNAME}\n"
         f"</blockquote>"
     )
 
@@ -5281,8 +5287,10 @@ def start_cmd(message):
     markup.add(create_success_button("➕ ADD BOT TO GROUP", url=f"https://t.me/{bot_username}?startgroup=start"))
 
     if is_admin(user_id):
-        markup.add(create_danger_button(" Admin Panel", callback_data="admin_panel", icon_custom_emoji_id="5339247212012528642"))
+        markup.add(create_success_button(" Admin Panel", callback_data="admin_panel", icon_custom_emoji_id="5339247212012528642"))
 
+    if message.chat.type != "private":
+        markup = None  # groups: commands only, buttons only in PM
     try:
         sent = send_with_premium(chat_id, msg, parse_mode='HTML', reply_markup=markup)
         schedule_deletion(sent.message_id, chat_id)
@@ -5385,7 +5393,6 @@ def help_cmd(message):
         f"/balance - Cʜᴇᴄᴋ ᴄʀᴇᴅɪᴛꜱ\n"
         f"/refer - Rᴇꜰᴇʀʀᴀʟ ᴄʀᴇᴅɪᴛꜱ\n"
         f"/help - Aʟʟ ᴄᴏᴍᴍᴀɴᴅꜱ\n\n"
-        f"{_h(H_STAR1,'🌟')} <b>Oᴡɴᴇʀ</b>: {OWNER_USERNAME}\n"
         f"</blockquote>"
     )
 
@@ -5517,7 +5524,7 @@ def redeem_cmd(message):
 
 ⚠️ NOTE: Each code can be used only ONCE per user!
 
-🎫 Get codes from admin: @flirts_x"""
+🎫 Get codes from admin"""
         send_with_premium(chat_id, msg)
         return
 
@@ -6271,53 +6278,176 @@ def insta_cmd(message):
 
 ADMIN_MENUS = {
     "users": ("👥 Users", [
-        ("👥 User Stats", "admin_users"), ("🔍 Search User", "admin_ask_searchuser"),
-        ("🚫 Block User", "admin_block"), ("✅ Unblock User", "admin_unblock"),
-        ("👑 Make Admin", "admin_makeadmin"), ("🗑 Remove Admin", "admin_removeadmin"),
+        ("👥 User Stats", "admin_users", "Total / admin / blocked users count."),
+        ("🔍 Search User", "admin_ask_searchuser", "User ki details. Example: <code>123456789</code> ya <code>@username</code>"),
+        ("🚫 Block User", "admin_block", "User ko ban karo. Example: <code>123456789</code>"),
+        ("✅ Unblock User", "admin_unblock", "Ban hatao. Example: <code>123456789</code>"),
+        ("👑 Make Admin", "admin_makeadmin", "Admin banao. Example: <code>123456789</code>"),
+        ("🗑 Remove Admin", "admin_removeadmin", "Admin hatao. Example: <code>123456789</code>"),
     ]),
     "credits": ("💰 Credits & Codes", [
-        ("➕ Add Credits", "admin_addcredits"), ("➖ Remove Credits", "admin_removecredits"),
-        ("🎟 Gen Code", "admin_ask_gen"), ("📜 All Codes", "admin_run_allcodes"),
-        ("❌ Delete Code", "admin_ask_deletecode"),
+        ("➕ Add Credits", "admin_addcredits", "Credits do. Example: <code>123456789 50</code>"),
+        ("➖ Remove Credits", "admin_removecredits", "Credits kaato. Example: <code>123456789 20</code>"),
+        ("🎟 Gen Code", "admin_ask_gen", "Redeem code banao (credits, kitne log, kitne din). Example: <code>50 10 30</code>"),
+        ("📜 All Codes", "admin_run_allcodes", "Saare redeem codes dekho."),
+        ("❌ Delete Code", "admin_ask_deletecode", "Code delete. Example: <code>ABC123XY</code>"),
     ]),
     "broadcast": ("📢 Broadcast", [
-        ("📢 Broadcast", "admin_broadcast_info"), ("📢 Broadcast Btn", "admin_ask_broadcastbtn"),
-        ("📡 Set BC Channel", "admin_setbc_info"), ("📡 Remove BC", "admin_run_removebc"),
+        ("📢 Broadcast", "admin_broadcast_info", "Koi bhi message bhejo (text / photo / video, premium emoji ke saath) — sabko waisa hi jayega."),
+        ("📢 Broadcast Btn", "admin_ask_broadcastbtn", "Button wala broadcast. Example: <code>Hello sabko!</code>"),
+        ("📡 Set BC Channel", "admin_setbc_info", "Is channel ki post auto sabko jayegi. Example: <code>-1001234567890</code>"),
+        ("📡 Remove BC", "admin_run_removebc", "Auto broadcast channel hatao."),
     ]),
     "channels": ("📡 Channels", [
-        ("➕ Add Channel", "admin_ask_addc"), ("➖ Remove Channel", "admin_ask_removec"),
-        ("📋 List Channels", "admin_run_listc"),
-        ("🔒 Lock Force Join", "admin_run_lockf"), ("🔓 Unlock Force Join", "admin_run_unlockf"),
+        ("➕ Add Channel", "admin_ask_addc", "Force join channel jodo. Example: <code>https://t.me/VillanCommunity</code>"),
+        ("➖ Remove Channel", "admin_ask_removec", "Channel hatao. Example: <code>VillanCommunity</code>"),
+        ("📋 List Channels", "admin_run_listc", "Saare force join channels."),
+        ("🔒 Lock Force Join", "admin_run_lockf", "Force join ON."),
+        ("🔓 Unlock Force Join", "admin_run_unlockf", "Force join OFF."),
     ]),
     "api": ("🔗 API", [
-        ("🔗 List APIs", "admin_run_api"), ("✏️ Change API", "admin_ask_apic"),
-        ("🔧 API Status", "admin_ask_apistatus"),
+        ("🔗 List APIs", "admin_run_api", "Saari APIs dekho."),
+        ("✏️ Change API", "admin_ask_apic", "API URL badlo. Example: <code>num https://api.example.com/num?q={query}</code>"),
+        ("🔧 API Status", "admin_ask_apistatus", "Command on/off. Example: <code>num off Maintenance</code>"),
     ]),
     "media": ("🖼 Media", [
-        ("🎬 Add Video", "admin_run_addvideo"), ("🖼 Add Photo", "admin_run_addphoto"),
-        ("✅ Done Media", "admin_run_done"), ("⚙️ Set Mode", "admin_ask_setmode"),
-        ("🎞 List Videos", "admin_run_listvideos"), ("🖼 List Photos", "admin_run_listphotos"),
-        ("🗑 Delete Video", "admin_run_delvideo"), ("🗑 Delete Photo", "admin_run_delphoto"),
+        ("🎬 Add Video", "admin_run_addvideo", "Videos bhejo, phir Done Media dabao."),
+        ("🖼 Add Photo", "admin_run_addphoto", "Photos bhejo, phir Done Media dabao."),
+        ("✅ Done Media", "admin_run_done", "Upload khatam."),
+        ("⚙️ Set Mode", "admin_ask_setmode", "Welcome media mode. Example: <code>video</code> / <code>photo</code> / <code>both</code>"),
+        ("🎞 List Videos", "admin_run_listvideos", "Saare videos."),
+        ("🖼 List Photos", "admin_run_listphotos", "Saari photos."),
+        ("🗑 Delete Video", "admin_run_delvideo", "List se video delete."),
+        ("🗑 Delete Photo", "admin_run_delphoto", "List se photo delete."),
     ]),
     "bot": ("⚙️ Bot Control", [
-        ("📊 Stats", "admin_stats"), ("📈 Command Stats", "admin_run_commands"),
-        ("⏱ Uptime", "admin_run_uptime"),
-        ("🔒 Lock Bot", "admin_run_lock"), ("🔓 Unlock Bot", "admin_run_unlock"),
+        ("📊 Stats", "admin_stats", "Bot ke poore stats."),
+        ("📈 Command Stats", "admin_run_commands", "Kaunsi command kitni chali."),
+        ("⏱ Uptime", "admin_run_uptime", "Bot kab se chal raha hai."),
+        ("🔒 Lock Bot", "admin_run_lock", "Bot sirf admin ke liye."),
+        ("🔓 Unlock Bot", "admin_run_unlock", "Bot sabke liye."),
     ]),
 }
+
+ADMIN_CAT_ICONS = {
+    "users": "5424746868275944727", "credits": "6048770006810893912",
+    "broadcast": "5233279094531045380", "channels": "5246931953751443616",
+    "api": "5465637267626271756", "media": "5008416661569536895",
+    "bot": "5992344826715050001",
+}
+
+# callback -> (function name, command, input needed?)
+ADMIN_ACTIONS = {
+    "admin_users": ("users_cmd", "/users", False),
+    "admin_stats": ("stats_cmd", "/stats", False),
+    "admin_addcredits": ("add_credits_cmd", "/add", True),
+    "admin_removecredits": ("remove_credits_cmd", "/removecredit", True),
+    "admin_block": ("block_cmd", "/block", True),
+    "admin_unblock": ("unblock_cmd", "/unblock", True),
+    "admin_makeadmin": ("promote_cmd", "/promote", True),
+    "admin_removeadmin": ("demote_cmd", "/demote", True),
+    "admin_setbc_info": ("setbc_cmd", "/setbc", True),
+    "admin_ask_searchuser": ("search_user_cmd", "/searchuser", True),
+    "admin_ask_gen": ("gen_code_cmd", "/gen", True),
+    "admin_run_allcodes": ("all_codes_cmd", "/allcodes", False),
+    "admin_ask_deletecode": ("delete_code_cmd", "/deletecode", True),
+    "admin_ask_broadcastbtn": ("broadcast_btn_cmd", "/broadcastbtn", True),
+    "admin_run_removebc": ("removebc_cmd", "/removebc", False),
+    "admin_ask_addc": ("add_channel_cmd", "/addc", True),
+    "admin_ask_removec": ("remove_channel_cmd", "/removec", True),
+    "admin_run_listc": ("list_channels_cmd", "/listc", False),
+    "admin_run_lockf": ("lock_force_join_cmd", "/lockf", False),
+    "admin_run_unlockf": ("unlock_force_join_cmd", "/unlockf", False),
+    "admin_run_api": ("list_apis_cmd", "/api", False),
+    "admin_ask_apic": ("change_api_cmd", "/apic", True),
+    "admin_ask_apistatus": ("apistatus_cmd", "/apistatus", True),
+    "admin_run_addvideo": ("add_video_cmd", "/addvideo", False),
+    "admin_run_addphoto": ("add_photo_cmd", "/addphoto", False),
+    "admin_run_done": ("done_adding_media", "/done", False),
+    "admin_ask_setmode": ("set_mode_cmd", "/setmode", True),
+    "admin_run_listvideos": ("list_videos_cmd", "/listvideos", False),
+    "admin_run_listphotos": ("list_photos_cmd", "/listphotos", False),
+    "admin_run_delvideo": ("del_video_cmd", "/delvideo", False),
+    "admin_run_delphoto": ("del_photo_cmd", "/delphoto", False),
+    "admin_run_commands": ("commands_stats_cmd", "/commands", False),
+    "admin_run_uptime": ("uptime_cmd", "/uptime", False),
+    "admin_run_lock": ("lock_bot_cmd", "/lock", False),
+    "admin_run_unlock": ("unlock_bot_cmd", "/unlock", False),
+}
+
+
+def _admin_action_info(cb):
+    for cat, (title, items) in ADMIN_MENUS.items():
+        for label, d, desc in items:
+            if d == cb:
+                return cat, label, desc
+    return None, cb, ""
+
+
+def admin_back_markup(cat=None):
+    markup = InlineKeyboardMarkup(row_width=2)
+    btns = []
+    if cat:
+        btns.append(create_default_button("🔙 Back", callback_data=f"admin_cat_{cat}"))
+    btns.append(create_success_button("🏠 Admin Panel", callback_data="admin_cat_main"))
+    markup.add(*btns)
+    return markup
+
+
+def admin_cat_text(cat):
+    title, items = ADMIN_MENUS[cat]
+    lines = [f"<b>{title}</b>\n", "Button dabao, bot batayega kya bhejna hai.\n"]
+    for label, _, desc in items:
+        lines.append(f"<b>{label}</b> — {desc}")
+    return "<blockquote>" + "\n".join(lines) + "</blockquote>"
 
 
 def admin_menu_markup(cat=None):
     markup = InlineKeyboardMarkup(row_width=2)
     if cat is None:
-        items = [(title, f"admin_cat_{k}") for k, (title, _) in ADMIN_MENUS.items()]
+        btns = [create_success_button(" " + title.split(" ", 1)[1], callback_data=f"admin_cat_{k}",
+                                      icon_custom_emoji_id=ADMIN_CAT_ICONS[k])
+                for k, (title, _) in ADMIN_MENUS.items()]
     else:
-        items = ADMIN_MENUS[cat][1]
-    btns = [create_success_button(t, callback_data=d) for t, d in items]
+        btns = [create_primary_button(t, callback_data=d) for t, d, _ in ADMIN_MENUS[cat][1]]
     markup.add(*btns)
     if cat is not None:
         markup.add(create_default_button("🔙 Back", callback_data="admin_cat_main"))
     return markup
+
+
+def broadcast_copy(admin_chat_id, src):
+    """Copy admin's message (text/media, premium emojis kept) to all users + groups."""
+    targets = set()
+    try:
+        for doc in _col_users.find({}, {"user_id": 1}):
+            targets.add(doc["user_id"])
+    except Exception:
+        pass
+    try:
+        targets.update(get_all_group_chats())
+    except Exception:
+        pass
+    total = len(targets)
+    ok = fail = 0
+    prog = bot.send_message(admin_chat_id, f"📢 Broadcast started...\n📊 Total: {total}")
+    for i, cid in enumerate(targets, 1):
+        try:
+            bot.copy_message(cid, src.chat.id, src.message_id, disable_notification=True)
+            ok += 1
+        except Exception:
+            fail += 1
+        if i % 25 == 0:
+            try:
+                bot.edit_message_text(f"📢 Sending... {i}/{total}\n✅ {ok}  ❌ {fail}", admin_chat_id, prog.message_id)
+            except Exception:
+                pass
+        time.sleep(0.05)
+    try:
+        bot.edit_message_text(f"✅ Broadcast done!\n\n📊 Total: {total}\n✅ Sent: {ok}\n❌ Failed: {fail}",
+                              admin_chat_id, prog.message_id, reply_markup=admin_back_markup("broadcast"))
+    except Exception:
+        pass
 
 
 def admin_panel(message):
@@ -6348,6 +6478,9 @@ def admin_cmd(message):
     user_id = message.from_user.id
     if not is_admin(user_id):
         send_with_premium(message.chat.id, "❌ Admin only!")
+        return
+    if message.chat.type != "private":
+        send_with_premium(message.chat.id, "⚙️ Admin panel sirf bot ke PM mein khulega.")
         return
     admin_panel(message)
 
@@ -7704,100 +7837,68 @@ def callback_handler(call):
             admin_panel(_cb_msg("/admin"))
             return
 
-        _admin_direct = {
-            "admin_stats": (stats_cmd, "/stats"),
-            "admin_users": (users_cmd, "/users"),
-            "admin_api_status": (apistatus_cmd, "/apistatus"),
-        }
-        if call.data in _admin_direct:
-            fn, txt = _admin_direct[call.data]
-            bot.answer_callback_query(call.id)
-            fn(_cb_msg(txt))
-            return
-
-        _admin_ask = {
-            "admin_addcredits": (add_credits_cmd, "/add", "user_id amount"),
-            "admin_removecredits": (remove_credits_cmd, "/removecredit", "user_id amount"),
-            "admin_block": (block_cmd, "/block", "user_id"),
-            "admin_unblock": (unblock_cmd, "/unblock", "user_id"),
-            "admin_makeadmin": (promote_cmd, "/promote", "user_id"),
-            "admin_removeadmin": (demote_cmd, "/demote", "user_id"),
-            "admin_broadcast_info": (broadcast_cmd, "/broadcast", "broadcast message"),
-            "admin_setbc_info": (setbc_cmd, "/setbc", "channel_id"),
-        }
-        if call.data in _admin_ask:
-            fn, cmd, hint = _admin_ask[call.data]
-            bot.answer_callback_query(call.id)
-            prompt = bot.send_message(call.message.chat.id, f"✏️ Send <b>{hint}</b> (or /cancel):", parse_mode="HTML")
-
-            def _on_reply(rm, fn=fn, cmd=cmd):
-                if not rm.text or rm.text.startswith("/cancel") or not is_admin(rm.from_user.id):
-                    bot.send_message(rm.chat.id, "❌ Cancelled.")
-                    return
-                rm.text = f"{cmd} {rm.text.strip()}"
-                fn(rm)
-
-            bot.register_next_step_handler(prompt, _on_reply)
-            return
-
         if call.data.startswith("admin_cat_"):
             cat = call.data[10:]
             bot.answer_callback_query(call.id)
+            bot.clear_step_handler_by_chat_id(call.message.chat.id)
+            if cat == "main":
+                text = "<blockquote><b>⚙️ ADMIN PANEL</b>\n\nSection chuno 👇</blockquote>"
+                mk = admin_menu_markup()
+            elif cat in ADMIN_MENUS:
+                text, mk = admin_cat_text(cat), admin_menu_markup(cat)
+            else:
+                return
             try:
-                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id,
-                                              reply_markup=admin_menu_markup(None if cat == "main" else cat))
+                bot.edit_message_text(text, call.message.chat.id, call.message.message_id,
+                                      parse_mode="HTML", reply_markup=mk)
             except Exception:
-                pass
+                try:
+                    bot.send_message(call.message.chat.id, text, parse_mode="HTML", reply_markup=mk)
+                except Exception:
+                    pass
             return
 
-        _cmd_fn = {
-            "apistatus": (apistatus_cmd, "command status message"),
-            "gen": (gen_code_cmd, "credits max_uses days (e.g. 50 10 30)"),
-            "allcodes": (all_codes_cmd, None), "deletecode": (delete_code_cmd, "code"),
-            "searchuser": (search_user_cmd, "user_id or username"),
-            "lock": (lock_bot_cmd, None), "unlock": (unlock_bot_cmd, None),
-            "broadcastbtn": (broadcast_btn_cmd, "broadcast text"),
-            "removebc": (removebc_cmd, None),
-            "addc": (add_channel_cmd, "channel username / link"),
-            "removec": (remove_channel_cmd, "channel username / link"),
-            "listc": (list_channels_cmd, None), "api": (list_apis_cmd, None),
-            "apic": (change_api_cmd, "command api_url"),
-            "setmode": (set_mode_cmd, "video / photo / both"),
-            "lockf": (lock_force_join_cmd, None), "unlockf": (unlock_force_join_cmd, None),
-            "addvideo": (add_video_cmd, None), "addphoto": (add_photo_cmd, None),
-            "done": (done_adding_media, None), "uptime": (uptime_cmd, None),
-            "listvideos": (list_videos_cmd, None), "listphotos": (list_photos_cmd, None),
-            "delvideo": (del_video_cmd, None), "delphoto": (del_photo_cmd, None),
-            "commands": (commands_stats_cmd, None),
-        }
-        if call.data.startswith(("admin_run_", "admin_ask_")):
-            cmd = call.data[10:]
-            if cmd not in _cmd_fn:
-                bot.answer_callback_query(call.id, "❌ Unknown action", True)
-                return
-            fn, hint = _cmd_fn[cmd]
+        if call.data == "admin_broadcast_info":
             bot.answer_callback_query(call.id)
-            if call.data.startswith("admin_run_") or not hint:
-                fn(_cb_msg("/" + cmd))
-                return
-            prompt = bot.send_message(call.message.chat.id, f"✏️ Send <b>{hint}</b> (or /cancel):", parse_mode="HTML")
+            prompt = bot.send_message(
+                call.message.chat.id,
+                "<blockquote><b>📢 Broadcast</b>\n\nAb wo message bhejo jo sabko jana chahiye.\n"
+                "Text, photo, video — premium emojis ke saath — sab waisa hi jayega.\n\n"
+                "Example: <i>🔥 New update aa gaya! /start karo</i></blockquote>",
+                parse_mode="HTML", reply_markup=admin_back_markup("broadcast"))
 
-            def _on_cmd_reply(rm, fn=fn, cmd=cmd):
-                if not rm.text or rm.text.startswith("/cancel") or not is_admin(rm.from_user.id):
-                    bot.send_message(rm.chat.id, "❌ Cancelled.")
+            def _on_bc(rm):
+                if not is_admin(rm.from_user.id) or (rm.text or "").startswith("/cancel"):
+                    bot.send_message(rm.chat.id, "❌ Cancelled.", reply_markup=admin_back_markup("broadcast"))
                     return
-                rm.text = f"/{cmd} {rm.text.strip()}"
-                fn(rm)
+                threading.Thread(target=broadcast_copy, args=(rm.chat.id, rm), daemon=True).start()
 
-            bot.register_next_step_handler(prompt, _on_cmd_reply)
+            bot.register_next_step_handler(prompt, _on_bc)
             return
 
-        _admin_usage = {
-            "admin_addmedia": "Usage: /addvideo or /addphoto, then send media and /done",
-            "admin_reload": "Restart the bot process to reload.",
-        }
-        if call.data in _admin_usage:
-            bot.answer_callback_query(call.id, _admin_usage[call.data], True)
+        if call.data in ADMIN_ACTIONS:
+            fname, cmd, needs_input = ADMIN_ACTIONS[call.data]
+            fn = globals()[fname]
+            cat, label, desc = _admin_action_info(call.data)
+            bot.answer_callback_query(call.id)
+            if not needs_input:
+                fn(_cb_msg(cmd))
+                bot.send_message(call.message.chat.id, "↩️", reply_markup=admin_back_markup(cat))
+                return
+            prompt = bot.send_message(
+                call.message.chat.id,
+                f"<blockquote><b>{label}</b>\n\n{desc}\n\n✏️ Ab bhejo 👇</blockquote>",
+                parse_mode="HTML", reply_markup=admin_back_markup(cat))
+
+            def _on_reply(rm, fn=fn, cmd=cmd, cat=cat):
+                if not rm.text or rm.text.startswith("/") or not is_admin(rm.from_user.id):
+                    bot.send_message(rm.chat.id, "❌ Cancelled.", reply_markup=admin_back_markup(cat))
+                    return
+                rm.text = f"{cmd} {rm.text.strip()}"
+                fn(rm)
+                bot.send_message(rm.chat.id, "↩️", reply_markup=admin_back_markup(cat))
+
+            bot.register_next_step_handler(prompt, _on_reply)
             return
 
         if call.data.startswith(("delvid_", "delphoto_")):
@@ -8151,7 +8252,6 @@ def contact_export_cmd(message):
 if __name__ == "__main__":
     print("=" * 60)
     print("✅ OSINT BOT STARTING WITH ALL FIXES...")
-    print("✅ Developer: ㅤ⏤͟͟͞͞𝗙ʟɪʀᴛ𝗫ᴏ")
     print("=" * 60)
 
     # Turso removed — MongoDB only
