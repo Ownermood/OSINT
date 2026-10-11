@@ -1388,8 +1388,17 @@ def commit_search_charge():
         print(f"commit_search_charge error: {e}")
 
 
+_API_FN_CMD = {"call_phone_api": "num", "call_tg_api": "tgid", "call_aadhar_api": "adhr",
+               "call_rc_api": "vechrc", "call_num2_api": "num2", "call_family_api": "family",
+               "call_upi_api": "upi", "call_insta_api": "insta", "call_snap_api": "snap",
+               "call_vehicle_api": "vech", "call_leak_api": "leak", "call_name_api": "name",
+               "call_pan_api": "pan", "call_ip_api": "ip", "call_pincode_api": "pin",
+               "call_git_api": "git", "call_bgmi_api": "bgmi", "call_ff_api": "ff", "call_ifsc_api": "ifsc"}
+
+
 def _charge_on_success(fn):
     def wrapper(*a, **kw):
+        _CHARGE_TL.cmd = _API_FN_CMD.get(fn.__name__)
         res = fn(*a, **kw)
         ok = bool(res) and not (isinstance(res, dict) and
                                 str(res.get("status", "")).lower() in ("error", "failed", "fail"))
@@ -2122,11 +2131,18 @@ print("Validation functions loaded")
 def get_api_endpoint(command_name):
     try:
         doc = _col_api_config.find_one({"command_name": command_name})
-        return doc["api_endpoint"] if doc else None
+        ep = doc["api_endpoint"] if doc else None
+        if ep and "{" not in ep:
+            ep = re.sub(r"=([^=&]*)$", "={query}", ep) if "=" in ep else ep + "{query}"
+        return ep
     except:
         return None
 
 def set_api_endpoint(command_name, endpoint, admin_id):
+    endpoint = endpoint.strip()
+    if "{" not in endpoint:
+        # sample value given (e.g. number=9876543210) → make the last parameter the search value
+        endpoint = re.sub(r"=([^=&]*)$", "={query}", endpoint) if "=" in endpoint else endpoint + "{query}"
     try:
         _col_api_config.update_one(
             {"command_name": command_name},
@@ -2212,6 +2228,14 @@ def make_api_request(url, timeout=10):
     rather than blocking the entire thread for 20-60 seconds.
     Adapter retries are disabled; fallbacks are handled per-caller.
     """
+    if str(url).startswith("PASTE_API_HERE"):
+        # placeholder URL in code → use the endpoint set from Admin Panel → API
+        cmd = getattr(_CHARGE_TL, "cmd", None)
+        custom = get_api_endpoint(cmd) if cmd else None
+        if not custom:
+            return {"status": "error", "message": f"API not set for /{cmd} — Admin Panel → API → Change URL"}
+        q = re.split(r"[=/]", str(url))[-1]
+        url = build_api_url(custom, q)
     cache_key = hashlib.md5(url.encode()).hexdigest()
     cached = API_CACHE.get(cache_key)
     if cached:
