@@ -5649,18 +5649,20 @@ def start_cmd(message):
         create_primary_button(" Balance", callback_data="balance", icon_custom_emoji_id="6136159783692017451"),
         create_primary_button(" Redeem", callback_data="redeem", icon_custom_emoji_id="6136204644625423818"),
     )
+    # row 3: Refer + (My Protection when the user has one)
+    _refer = create_primary_button(" Refer & Earn", callback_data="refer", icon_custom_emoji_id="5424968454228680999")
     if is_admin(user_id) or user_protections(user_id):
-        markup.add(create_success_button(" My Protection", callback_data="myprotect",
-                                         icon_custom_emoji_id="6019328362479097179"))
-    markup.add(create_primary_button(" Refer & Earn", callback_data="refer",
-                                     icon_custom_emoji_id="5424968454228680999"))
-    markup.add(create_success_button(" Buy Credits / Protect Number", callback_data="buyplans",
-                                     icon_custom_emoji_id="6048770006810893912"))
-    markup.add(create_success_button(" Add Bot To Group", url=f"https://t.me/{bot_username}?startgroup=start",
+        markup.row(_refer, create_primary_button(" My Protection", callback_data="myprotect",
+                                                 icon_custom_emoji_id="6019328362479097179"))
+    else:
+        markup.row(_refer)
+    # row 4: plans + add to group (green)
+    markup.row(create_success_button(" Premium Plans", callback_data="buyplans", icon_custom_emoji_id="6048770006810893912"),
+               create_success_button(" Add To Group", url=f"https://t.me/{bot_username}?startgroup=start",
                                      icon_custom_emoji_id="6136525109315245846"))
-
+    # row 5: admin only (red)
     if is_admin(user_id):
-        markup.add(create_danger_button(" Admin Panel", callback_data="admin_panel", icon_custom_emoji_id="6136231213293116410"))
+        markup.row(create_danger_button(" Admin Panel", callback_data="admin_panel", icon_custom_emoji_id="6136231213293116410"))
 
     if message.chat.type != "private":
         markup = None  # groups: commands only, buttons only in PM
