@@ -7656,6 +7656,72 @@ def callback_handler(call):
             bot.answer_callback_query(call.id)
             return
 
+        # ── menu / admin buttons → reuse existing command handlers ──
+        def _cb_msg(text):
+            import copy as _copy
+            m = _copy.copy(call.message)
+            m.from_user = call.from_user
+            m.text = text
+            m.date = int(datetime.now().timestamp())
+            return m
+
+        if call.data == "redeem":
+            bot.answer_callback_query(call.id)
+            redeem_cmd(_cb_msg("/redeem"))
+            return
+
+        if call.data == "admin_panel" or call.data.startswith(("admin_", "delvid_", "delphoto_")):
+            if not is_admin(call.from_user.id):
+                bot.answer_callback_query(call.id, "❌ Admin only!", True)
+                return
+
+        if call.data == "admin_panel":
+            bot.answer_callback_query(call.id)
+            admin_panel(_cb_msg("/admin"))
+            return
+
+        _admin_direct = {
+            "admin_stats": (stats_cmd, "/stats"),
+            "admin_users": (users_cmd, "/users"),
+            "admin_api_status": (apistatus_cmd, "/apistatus"),
+        }
+        if call.data in _admin_direct:
+            fn, txt = _admin_direct[call.data]
+            bot.answer_callback_query(call.id)
+            fn(_cb_msg(txt))
+            return
+
+        _admin_usage = {
+            "admin_addcredits": "Usage: /add <user_id> <amount>",
+            "admin_removecredits": "Usage: /removecredit <user_id> <amount>",
+            "admin_block": "Usage: /block <user_id>",
+            "admin_unblock": "Usage: /unblock <user_id>",
+            "admin_makeadmin": "Usage: /promote <user_id>",
+            "admin_removeadmin": "Usage: /demote <user_id>",
+            "admin_broadcast_info": "Usage: /broadcast <message> (or reply to a message)",
+            "admin_setbc_info": "Usage: /setbc <channel_id>",
+            "admin_addmedia": "Usage: /addvideo or /addphoto, then send media and /done",
+            "admin_reload": "Restart the bot process to reload.",
+        }
+        if call.data in _admin_usage:
+            bot.answer_callback_query(call.id, _admin_usage[call.data], True)
+            return
+
+        if call.data.startswith(("delvid_", "delphoto_")):
+            is_vid = call.data.startswith("delvid_")
+            try:
+                mid = call.data.split("_", 1)[1]
+                ok, dmsg = (delete_video if is_vid else delete_photo)(mid, call.from_user.id)
+                bot.answer_callback_query(call.id, ("✅ " if ok else "❌ ") + dmsg, True)
+                if ok:
+                  try:
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                  except Exception:
+                    pass
+            except Exception as de:
+                bot.answer_callback_query(call.id, f"❌ {de}", True)
+            return
+
         bot.answer_callback_query(call.id)
     except Exception as e:
         print(f"❌ Callback error: {e}")
