@@ -9825,25 +9825,35 @@ def _plain_label(lbl):
 
 
 def _add_copy_box(t):
-    """Append one code block with every 'Label : value' line → Telegram shows a Copy button."""
+    """Move every 'Label : value' line into ONE code block (Telegram adds a Copy button),
+    so the info shows once — header, status and footer stay as they are."""
     if "<pre>" in t:
         return t
     import html as _h
-    rows = []
+    rows, out_lines, at = [], [], None
     for line in t.split("\n"):
         m = re.match(r"^(.*?)\s*:\s*(.+)$", re.sub(r"<tg-emoji[^>]*>.*?</tg-emoji>", "", line))
-        if not m:
-            continue
-        lbl = _plain_label(m.group(1))
-        val = _h.unescape(re.sub(r"<[^>]+>", "", m.group(2))).strip()
-        if not lbl or not val or val in ("—", "-", "N/A", "None") or any(x in lbl.lower() for x in _SKIP_COPY):
-            continue
-        rows.append(f"{lbl:<10}: {val}")
+        if m:
+            lbl = _plain_label(m.group(1))
+            val = _h.unescape(re.sub(r"<[^>]+>", "", m.group(2))).strip()
+            if lbl and val and not any(x in lbl.lower() for x in _SKIP_COPY):
+                if val not in ("—", "-", "N/A", "None"):
+                    rows.append(f"{lbl:<10}: {val}")
+                tags = "".join(re.findall(r"</?blockquote[^>]*>", line))   # keep HTML balanced
+                if tags:
+                    out_lines.append(tags)
+                at = len(out_lines)   # box goes right after the last info line
+                continue
+        out_lines.append(line)
     if len(rows) < 2:
         return t
     box = "\n".join(rows).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    out = t.rstrip() + f"\n📋 <b>Copy all</b>\n<pre>{box}</pre>"
-    visible = _h.unescape(re.sub(r"<[^>]+>", "", out))   # Telegram counts visible text, not HTML
+    out_lines.insert(at, f"<pre>{box}</pre>")
+    out = "\n".join(out_lines)
+    out = re.sub(r"<blockquote[^>]*>\s*(<pre>.*?</pre>)\s*</blockquote>", r"\1", out, flags=re.S)
+    out = re.sub(r"<blockquote[^>]*>\s*</blockquote>", "", out)   # quote boxes that are now empty
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    visible = _h.unescape(re.sub(r"<[^>]+>", "", out))
     return out if len(visible) < 4000 else t
 
 
