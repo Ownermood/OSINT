@@ -6883,46 +6883,70 @@ _col_broadcasts = _db["broadcasts"]
 
 
 def save_broadcast(sent, replace_last=False):
-    """Remember who got which message, so the broadcast can be deleted later."""
+    """Remember who got which message, so the broadcast can be deleted later. Returns its id."""
     pairs = [[c, m] for c, m in sent if m]
     try:
         if replace_last:
             last = _col_broadcasts.find_one(sort=[("ts", -1)])
             if last and not last.get("deleted"):
                 _col_broadcasts.update_one({"_id": last["_id"]}, {"$set": {"sent": pairs}})
-                return
-        _col_broadcasts.insert_one({"ts": time.time(), "sent": pairs, "deleted": False})
+                return str(last["_id"])
+        return str(_col_broadcasts.insert_one({"ts": time.time(), "sent": pairs, "deleted": False}).inserted_id)
     except Exception as e:
         print(f"save_broadcast error: {e}")
+        return None
 
 
-def delete_last_broadcast(admin_chat_id):
-    doc = _col_broadcasts.find_one({"deleted": False}, sort=[("ts", -1)])
-    if not doc:
-        bot.send_message(admin_chat_id, "❌ Koi saved broadcast nahi mila.", reply_markup=admin_back_markup("broadcast"))
+def _progress_bar(done, total, width=10):
+    filled = int(width * done / total) if total else width
+    return "▰" * filled + "▱" * (width - filled)
+
+
+def delete_broadcast(admin_chat_id, bc_id=None, edit_msg_id=None):
+    """Delete a broadcast (by id, or the last one) from every chat it was sent to."""
+    from bson import ObjectId
+    q = {"_id": ObjectId(bc_id)} if bc_id else {"deleted": False}
+    doc = _col_broadcasts.find_one(q, sort=[("ts", -1)])
+    if not doc or doc.get("deleted"):
+        bot.send_message(admin_chat_id, "❌ Ye broadcast pehle hi delete ho chuka hai ya mila nahi.",
+                         reply_markup=admin_back_markup("broadcast"))
         return
     pairs = doc.get("sent", [])
-    prog = bot.send_message(admin_chat_id, f"🗑 Deleting broadcast... 0/{len(pairs)}")
+    total = len(pairs)
+    if edit_msg_id:
+        prog_id = edit_msg_id
+    else:
+        prog_id = bot.send_message(admin_chat_id, "🗑 Deleting broadcast...").message_id
     ok = fail = 0
+    last_edit = 0
     for i, (c, m) in enumerate(pairs, 1):
         try:
             bot.delete_message(c, m)
             ok += 1
         except Exception:
             fail += 1
-        if i % 25 == 0:
+        if time.time() - last_edit > 1.2 or i == total:
+            last_edit = time.time()
             try:
-                bot.edit_message_text(f"🗑 Deleting... {i}/{len(pairs)}", admin_chat_id, prog.message_id)
+                bot.edit_message_text(
+                    f"<blockquote>🗑 <b>Deleting Broadcast</b>\n\n{_progress_bar(i, total)}  {int(100 * i / total) if total else 100}%\n"
+                    f"🗑 Deleted: {ok}   ❌ Failed: {fail}   📊 {i}/{total}</blockquote>",
+                    admin_chat_id, prog_id, parse_mode="HTML")
             except Exception:
                 pass
         time.sleep(0.04)
     _col_broadcasts.update_one({"_id": doc["_id"]}, {"$set": {"deleted": True}})
     try:
-        bot.edit_message_text(f"✅ Broadcast deleted!\n\n🗑 Deleted: {ok}\n❌ Failed: {fail}\n"
-                              f"(48 ghante se purane message Telegram delete nahi karne deta)",
-                              admin_chat_id, prog.message_id, reply_markup=admin_back_markup("broadcast"))
+        bot.edit_message_text(
+            f"<blockquote>✅ <b>Broadcast Deleted!</b>\n\n🗑 Deleted: <b>{ok}</b>\n❌ Failed: <b>{fail}</b>\n📊 Total: <b>{total}</b>\n\n"
+            f"⏳ 48 ghante se purane message Telegram delete nahi karne deta.</blockquote>",
+            admin_chat_id, prog_id, parse_mode="HTML", reply_markup=admin_back_markup("broadcast"))
     except Exception:
         pass
+
+
+def delete_last_broadcast(admin_chat_id):
+    delete_broadcast(admin_chat_id)
 
 
 def broadcast_copy(admin_chat_id, src, markup=None):
@@ -6938,27 +6962,51 @@ def broadcast_copy(admin_chat_id, src, markup=None):
     except Exception:
         pass
     total = len(targets)
-    ok = fail = 0
-    prog = bot.send_message(admin_chat_id, f"📢 Broadcast started...\n📊 Total: {total}")
+    state = {"i": 0, "ok": 0, "fail": 0, "done": False}
+    prog = bot.send_message(admin_chat_id, "<blockquote>📢 <b>Broadcasting...</b></blockquote>", parse_mode="HTML")
+
+    def _anim():
+        spin = ["◐", "◓", "◑", "◒"]
+        k = 0
+        while not state["done"]:
+            i = state["i"]
+            try:
+                bot.edit_message_text(
+                    f"<blockquote>📢 <b>Broadcasting</b> {spin[k % 4]}\n\n{_progress_bar(i, total)}  {int(100 * i / total) if total else 100}%\n"
+                    f"✅ Sent: {state['ok']}   ❌ Failed: {state['fail']}   📊 {i}/{total}</blockquote>",
+                    admin_chat_id, prog.message_id, parse_mode="HTML")
+            except Exception:
+                pass
+            k += 1
+            time.sleep(1.2)
+
+    threading.Thread(target=_anim, daemon=True).start()
     sent = []
-    for i, cid in enumerate(targets, 1):
+    for cid in targets:
         try:
             r = bot.copy_message(cid, src.chat.id, src.message_id, disable_notification=True,
                                  reply_markup=markup)
             sent.append((cid, getattr(r, "message_id", None)))
-            ok += 1
+            state["ok"] += 1
         except Exception:
-            fail += 1
-        if i % 25 == 0:
-            try:
-                bot.edit_message_text(f"📢 Sending... {i}/{total}\n✅ {ok}  ❌ {fail}", admin_chat_id, prog.message_id)
-            except Exception:
-                pass
+            state["fail"] += 1
+        state["i"] += 1
         time.sleep(0.05)
-    save_broadcast(sent)
+    state["done"] = True
+    bc_id = save_broadcast(sent)
+    time.sleep(1.3)
+    mk = InlineKeyboardMarkup(row_width=1)
+    if bc_id and sent:
+        mk.add(create_danger_button(" Delete This Broadcast", callback_data=f"admin_delbcid_{bc_id}",
+                                    icon_custom_emoji_id="6021413766669801212"))
+    for row in admin_back_markup("broadcast").keyboard:
+        mk.row(*row)
     try:
-        bot.edit_message_text(f"✅ Broadcast done!\n\n📊 Total: {total}\n✅ Sent: {ok}\n❌ Failed: {fail}",
-                              admin_chat_id, prog.message_id, reply_markup=admin_back_markup("broadcast"))
+        bot.edit_message_text(
+            f"<blockquote>✅ <b>Broadcast Done!</b>\n\n{_progress_bar(1, 1)}  100%\n\n"
+            f"📊 Total: <b>{total}</b>\n✅ Sent: <b>{state['ok']}</b>\n❌ Failed: <b>{state['fail']}</b>\n\n"
+            f"ℹ️ Failed = jinhone bot block kiya ya kabhi /start nahi kiya.</blockquote>",
+            admin_chat_id, prog.message_id, parse_mode="HTML", reply_markup=mk)
     except Exception:
         pass
 
@@ -8471,6 +8519,13 @@ def callback_handler(call):
             edit_with_premium(call.message.chat.id, call.message.message_id,
                               "<blockquote>🗑 <b>Delete Last Broadcast?</b>\n\nAakhri broadcast sab users "
                               "aur groups ke chat se hata diya jayega.</blockquote>", reply_markup=mk)
+            return
+
+        if call.data.startswith("admin_delbcid_"):
+            bot.answer_callback_query(call.id, "Deleting...")
+            threading.Thread(target=delete_broadcast,
+                             args=(call.message.chat.id, call.data[len("admin_delbcid_"):], call.message.message_id),
+                             daemon=True).start()
             return
 
         if call.data == "admin_delbc_yes":
