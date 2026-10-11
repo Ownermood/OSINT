@@ -9850,11 +9850,18 @@ def _add_copy_box(t):
     if len(rows) < 2:
         return t
     box = "\n".join(rows).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    out_lines.insert(at, f"<pre>{box}</pre>")
+    before = "\n".join(out_lines[:at])
+    inside_quote = before.count("<blockquote") > before.count("</blockquote>")
+    # a code block inside a quote loses Telegram's Copy button → close the quote around it
+    block = f"</blockquote>\n<pre>{box}</pre>\n<blockquote>" if inside_quote else f"<pre>{box}</pre>"
+    out_lines.insert(at, block)
     out = "\n".join(out_lines)
     out = re.sub(r"<blockquote[^>]*>\s*(<pre>.*?</pre>)\s*</blockquote>", r"\1", out, flags=re.S)
     out = re.sub(r"<blockquote[^>]*>\s*</blockquote>", "", out)   # quote boxes that are now empty
-    out = re.sub(r"\n{3,}", "\n\n", out)
+    out = re.sub(r"<blockquote[^>]*>\s*</blockquote>", "", out)
+    out = re.sub(r"\s*\n\s*</blockquote>", "</blockquote>", out)      # no blank line at quote end
+    out = re.sub(r"<blockquote>\s*\n", "<blockquote>", out)            # …or at quote start
+    out = re.sub(r"\n\s*\n+", "\n", out)                               # no empty lines → no big gaps
     visible = _h.unescape(re.sub(r"<[^>]+>", "", out))
     return out if len(visible) < 4000 else t
 
