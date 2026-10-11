@@ -9815,7 +9815,7 @@ def _is_result_text(t):
 _SC_BACK = {v: k for k, v in zip("abcdefghijklmnopqrstuvwxyz", "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ")}
 _SC_BACK.update({"ᴩ": "p", "ɪ": "i", "ʏ": "y", "ꜱ": "s", "ғ": "f", "ᴏ": "o"})
 _SKIP_COPY = ("left", "speed", "response", "powered", "record", "page", "status", "type", "database",
-              "query", "user id")
+              "query")
 
 
 def _plain_label(lbl):
@@ -9823,10 +9823,11 @@ def _plain_label(lbl):
     lbl = _h.unescape(re.sub(r"<[^>]+>", "", lbl))
     lbl = "".join(_SC_BACK.get(c, c) for c in lbl)
     lbl = re.sub(r"[^\w\s./()-]", "", lbl).strip()
-    return lbl[:1].upper() + lbl[1:].lower() if lbl else lbl
+    lbl = lbl[:1].upper() + lbl[1:].lower() if lbl else lbl
+    return re.sub(r"\b(id|tg)\b", lambda m: m.group(1).upper(), lbl, flags=re.I)
 
 
-_ROW_EMO = {"phone": "📲", "number": "📲", "mobile": "📲", "cc": "🌐", "country": "🏳", "name": "👤",
+_ROW_EMO = {"user id": "🆔", "tg id": "🆔", "phone": "📲", "number": "📲", "mobile": "📲", "cc": "🌐", "country": "🏳", "name": "👤",
             "username": "🏷", "email": "📧", "address": "🏡", "city": "🏙", "state": "🗺"}
 
 
