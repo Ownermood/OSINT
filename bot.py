@@ -287,6 +287,10 @@ _EM = {
     "💬": "5424611538151437896", "🔐": "6138450100772411870", "🔒": "6138450100772411870",
     "🔓": "6136198451282581752", "✍": "6136389654636665179", "🆕": "6136525109315245846",
     "❎": "5217890643321300022", "✖": "5217890643321300022",
+    "🏷": "6021594546138257831", "🌐": "6019205852831947754", "🔭": "5424700761802023186",
+    "✈": "6019107055699236857", "🎟": "6136204644625423818", "🗑": "6021413766669801212",
+    "🖼": "6021321527952153006", "📨": "6019263620142078168", "📜": "6136389654636665179",
+    "🫡": "6136205108481890460", "✅": "6019175208240289774",
 }
 
 
@@ -8216,7 +8220,7 @@ def api_detail_view(cmd):
             f"<blockquote>📍 Status: <b>{'✅ Working' if working else '⚠️ Off'}</b>"
             f"{(' — ' + _html.escape(smsg)) if (smsg and not working) else ''}\n"
             f"🏷 Type: <b>{'Custom' if custom else ('⚠️ Not set — tap Change URL' if str(ep).startswith(('PASTE', '/')) else 'Default')}</b>\n\n"
-            f"🌐 URL:\n<code>{_html.escape(str(ep))}</code></blockquote>")
+            f"🌐 URL:\n<code>{str(ep).replace('<', '&lt;').replace('>', '&gt;')}</code></blockquote>")
     mk = InlineKeyboardMarkup(row_width=2)
     mk.add(create_primary_button(" Change URL", callback_data=f"admin_apiurl_{cmd}",
                                  icon_custom_emoji_id="6030591832608479858"),
@@ -9752,6 +9756,13 @@ def _sc_wrap(method, fields):
                     and "message to edit not found" not in err and "chat not found" not in err:
                 # never lose a message because of a bad premium emoji tag
                 print(f"[premium-emoji fallback] {err[:120]}")
+                txt = kw.get("text") or kw.get("caption") or next((a for a in args if isinstance(a, str) and "<tg-emoji" in a), "")
+                if _find_dead_emoji_ids(txt):
+                    _apply(args, kw, _fix_tg_emoji)   # keep every good premium emoji
+                    try:
+                        return method(*args, **kw)
+                    except Exception:
+                        pass
                 _apply(args, kw, _strip_tg_emoji)
                 return method(*args, **kw)
             raise
@@ -9821,16 +9832,41 @@ def _autodelete_loop():
 _TG_EMOJI_RE = re.compile(r'<tg-emoji emoji-id="[^"]*">(.*?)</tg-emoji>', re.S)
 
 
+_BAD_EMOJI_IDS = set()
+_TG_EMOJI_ID_RE = re.compile(r'<tg-emoji emoji-id="(\d+)">(.*?)</tg-emoji>', re.S)
+
+
 def _fix_tg_emoji(text):
-    """Unwrap premium tags whose inner text is not a single emoji (Telegram rejects those)."""
+    """Unwrap premium tags Telegram would reject: inner text not an emoji, or an emoji ID known to be dead."""
     if not text or not isinstance(text, str) or "<tg-emoji" not in text:
         return text
     def chk(m):
-        inner = m.group(1)
+        eid, inner = m.group(1), m.group(2)
         bad = (not inner.strip()) or any(c.isalnum() or c in "<>" for c in inner) or len(inner) > 12 \
-            or not is_real_emoji(inner)
+            or not is_real_emoji(inner) or eid in _BAD_EMOJI_IDS
         return inner if bad else m.group(0)
-    return _TG_EMOJI_RE.sub(chk, text)
+    return _TG_EMOJI_ID_RE.sub(chk, text)
+
+
+def _find_dead_emoji_ids(text):
+    """Ask Telegram which emoji IDs in the text still exist; remember the dead ones."""
+    ids = list(dict.fromkeys(_TG_EMOJI_ID_RE.findall(text or "")))
+    ids = [i for i, _ in ids] if ids and isinstance(ids[0], tuple) else ids
+    if not ids:
+        return set()
+    alive = set()
+    try:
+        for k in range(0, len(ids), 200):
+            for st in bot.get_custom_emoji_stickers(ids[k:k + 200]):
+                alive.add(str(getattr(st, "custom_emoji_id", "")))
+    except Exception as e:
+        print(f"[premium-emoji] check failed: {e}")
+        return set()
+    dead = set(ids) - alive
+    if dead:
+        _BAD_EMOJI_IDS.update(dead)
+        print(f"[premium-emoji] dead IDs removed: {', '.join(sorted(dead))}")
+    return dead
 
 
 def _strip_tg_emoji(text):
