@@ -2041,6 +2041,11 @@ def enforce_force_join(message):
 def schedule_deletion(message_id, chat_id):
     if isinstance(chat_id, int) and chat_id > 0:
         return  # private chat: keep messages (menu must not vanish)
+    try:
+        _queue_delete(chat_id, message_id, AUTO_DELETE_TIME)   # survives restarts
+        return
+    except NameError:
+        pass
     def delete():
         time.sleep(AUTO_DELETE_TIME)
         try:
@@ -9693,6 +9698,8 @@ def _sc_wrap(method, fields):
             if is_result and method.__name__ in ("send_message", "send_photo", "send_document"):
                 _delete_later(res, RESULT_DELETE_TIME)
                 _RESULT_TL.t = time.time()
+            elif is_result and method.__name__ in ("edit_message_text", "edit_message_caption"):
+                _delete_later(res, RESULT_DELETE_TIME, extend=True)   # Next/Prev page: restart the 1-min timer
             elif method.__name__ in ("send_photo", "send_video", "send_animation", "send_document") \
                     and time.time() - getattr(_RESULT_TL, "t", 0) < 20:
                 _delete_later(res, RESULT_DELETE_TIME)   # media sent with a search result
@@ -9733,18 +9740,39 @@ def _copyable_values(t):
     return "".join(p if p.startswith("<pre>") else _VAL_RE.sub(w, p) for p in parts)
 
 
-def _delete_later(msg, secs):
+_col_pending_del = _db["pending_deletes"]
+
+
+def _queue_delete(cid, mid, secs, extend=False):
+    """Saved in the database, so it still happens after a restart.
+    The earliest time wins, unless extend=True (Next/Prev page restarts the timer)."""
+    try:
+        due = time.time() + secs
+        op = {"$set": {"due": due}} if extend else {"$min": {"due": due}}
+        _col_pending_del.update_one({"cid": int(cid), "mid": int(mid)}, op, upsert=True)
+    except Exception as e:
+        print(f"[autodelete] queue error: {e}")
+
+
+def _delete_later(msg, secs, extend=False):
     if not msg or not getattr(msg, "chat", None):
         return
-    cid, mid = msg.chat.id, msg.message_id
+    _queue_delete(msg.chat.id, msg.message_id, secs, extend)
 
-    def _d():
-        time.sleep(secs)
+
+def _autodelete_loop():
+    while True:
         try:
-            bot.delete_message(cid, mid)
-        except Exception:
-            pass
-    threading.Thread(target=_d, daemon=True).start()
+            now = time.time()
+            for d in list(_col_pending_del.find({"due": {"$lte": now}}).limit(200)):
+                try:
+                    bot.delete_message(d["cid"], d["mid"])
+                except Exception:
+                    pass   # already gone / too old — drop it anyway
+                _col_pending_del.delete_one({"_id": d["_id"]})
+        except Exception as e:
+            print(f"[autodelete] {e}")
+        time.sleep(5)
 
 
 _TG_EMOJI_RE = re.compile(r'<tg-emoji emoji-id="[^"]*">(.*?)</tg-emoji>', re.S)
@@ -9863,6 +9891,7 @@ if __name__ == "__main__":
             time.sleep(300)
 
     threading.Thread(target=_protection_expiry_loop, daemon=True).start()
+    threading.Thread(target=_autodelete_loop, daemon=True).start()
 
     try:
         bot.polling(non_stop=True, skip_pending=True, timeout=15)
