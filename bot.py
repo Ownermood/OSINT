@@ -5582,7 +5582,8 @@ def start_cmd(message):
         f"\n"
         f"{_s(SMILEY,'😀')} <b>Hᴇʏ !! {first_name}</b>\n"
         f"{_s(IDICO,'🆔')} <b>ID</b>: <code>{user_id}</code>\n"
-        f"{_s(BADGE,'⚜️')} <b>Cʀᴇᴅɪᴛꜱ</b>: <b>{credits}</b>\n\n"
+        f"{_s(BADGE,'⚜️')} <b>Cʀᴇᴅɪᴛꜱ</b>: <b>{credits}</b>\n"
+        f"{_s(STAR1,'🌟')} <b>Fʀᴇᴇ Tᴏᴅᴀʏ</b>: <b>{free_left(user_id, False)}/{FREE_SEARCH_PM}</b> (PM) · <b>{free_left(user_id, True)}/{FREE_SEARCH_GROUP}</b> (Group)\n\n"
         f"{DIV}"
         f"{_s(DIAM,'💎')} <b>OSINT COMMANDS:</b>\n\n"
         f"{_s(PHONE,'☎️')} /num <code>9876543210</code> - Indian Phone\n"
@@ -5618,7 +5619,8 @@ def start_cmd(message):
     _custom = get_setting("welcome_text")
     if _custom:
         msg = (_custom.replace("{name}", first_name).replace("{id}", str(user_id))
-                      .replace("{credits}", str(credits)))
+                      .replace("{credits}", str(credits))
+                      .replace("{free}", str(free_left(user_id, message.chat.type in ("group", "supergroup")))))
 
     markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
@@ -5776,6 +5778,7 @@ def profile_cmd(message):
 👤 Username: @{user_data[1] or 'N/A'}
 📝 Name: {user_data[2] or 'User'}
 💰 Credits: {user_data[3] or 0}
+🎁 Free Today: {free_left(user_id, False)}/{FREE_SEARCH_PM} (PM) · {free_left(user_id, True)}/{FREE_SEARCH_GROUP} (Group)
 👥 Referrals: {user_data[6] or 0}
 ⚡ Commands Used: {user_data[9] or 0}
 👑 Admin: {'✅' if user_data[4] == 1 or user_id == ADMIN_ID else '❌'}
@@ -5807,6 +5810,8 @@ def balance_cmd(message):
 💰 CREDIT BALANCE
 
 💳 Credits: {credits}
+🎁 Free Today: {free_left(user_id, False)}/{FREE_SEARCH_PM} (PM) · {free_left(user_id, True)}/{FREE_SEARCH_GROUP} (Group)
+⏰ Free searches reset daily
 """
     try:
         sent = send_with_premium(chat_id, msg)
