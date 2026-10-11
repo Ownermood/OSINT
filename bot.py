@@ -1665,7 +1665,22 @@ def _channel_chat_ref(channel):
 # {user_id: set(channel_username)}
 JOIN_REQUESTS_SENT = {}
 
+_MEMBER_OK = {}          # user_id -> time of last successful check
+_MEMBER_TTL = 600        # seconds
+
+
 def check_subscription(user_id):
+    if not FORCE_JOIN_ENABLED:
+        return True
+    if time.time() - _MEMBER_OK.get(user_id, 0) < _MEMBER_TTL:
+        return True
+    ok = _check_subscription_live(user_id)
+    if ok:
+        _MEMBER_OK[user_id] = time.time()
+    return ok
+
+
+def _check_subscription_live(user_id):
     if not FORCE_JOIN_ENABLED:
         return True
     if user_id == ADMIN_ID:
@@ -1908,6 +1923,8 @@ def enforce_force_join(message):
     return True
 
 def schedule_deletion(message_id, chat_id):
+    if isinstance(chat_id, int) and chat_id > 0:
+        return  # private chat: keep messages (menu must not vanish)
     def delete():
         time.sleep(AUTO_DELETE_TIME)
         try:
@@ -7963,12 +7980,19 @@ def callback_handler(call):
                         JOIN_REQUESTS_SENT[user_id] = set()
                     JOIN_REQUESTS_SENT[user_id].add(_uname)
 
+            _MEMBER_OK.pop(user_id, None)
             if check_subscription(user_id):
-                bot.answer_callback_query(call.id, "✅ Verification successful!", True)
+                bot.answer_callback_query(call.id, "✅ Verified! Welcome")
+                import copy as _copy
+                fm = _copy.copy(call.message)
+                fm.from_user = call.from_user
+                fm.text = "/start"
+                fm.date = int(datetime.now().timestamp())
+                _EDIT_TL.target = (chat_id, call.message.message_id, None)
                 try:
-                    bot.delete_message(chat_id, call.message.message_id)
-                except:
-                    pass
+                    start_cmd(fm)   # replaces the join message with the full menu
+                finally:
+                    _EDIT_TL.target = None
             else:
                 bot.answer_callback_query(call.id, "❌ Please join all channels first!", True)
             return
@@ -8708,6 +8732,19 @@ def contact_export_cmd(message):
         except Exception:
             pass
 
+
+# ── cache bot.get_me() (it was a network call on every command) ──
+_ME_CACHE = {}
+_orig_get_me = bot.get_me
+
+
+def _cached_get_me():
+    if "me" not in _ME_CACHE:
+        _ME_CACHE["me"] = _orig_get_me()
+    return _ME_CACHE["me"]
+
+
+bot.get_me = _cached_get_me
 
 # ── ɴᴏᴛɪᴄᴇ font everywhere (messages + buttons) ─────────────────────
 # Skips: HTML tags, <code>/<pre>/<a> content, `code`, /commands, @usernames,
