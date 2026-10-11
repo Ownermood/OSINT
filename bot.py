@@ -1012,11 +1012,25 @@ def check_api_status(command):
     return status["working"], status.get("message")
 
 def set_api_status(command, working, message=None):
-    if command in API_STATUS:
-        API_STATUS[command]["working"] = working
-        API_STATUS[command]["message"] = message
-        return True
-    return False
+    if command not in API_STATUS:
+        API_STATUS[command] = {"working": True, "message": None}
+    API_STATUS[command]["working"] = working
+    API_STATUS[command]["message"] = message
+    try:
+        set_setting("api_status", {k: v for k, v in API_STATUS.items() if not v.get("working", True)})
+    except Exception:
+        pass
+    return True
+
+
+def load_api_status():
+    """Restore OFF APIs after a restart."""
+    try:
+        for k, v in (get_setting("api_status", {}) or {}).items():
+            API_STATUS.setdefault(k, {})
+            API_STATUS[k].update({"working": bool(v.get("working", True)), "message": v.get("message")})
+    except Exception as e:
+        print(f"load_api_status: {e}")
 
 MEDIA_MODE = "both"
 
@@ -6746,9 +6760,7 @@ ADMIN_MENUS = {
         ("Join Message", "admin_joinmsg", "The force-join message · <code>reset</code> = default", "6136389654636665179"),
     ]),
     "api": ("API", [
-        ("API Manager", "admin_run_api", "View each API URL, change it, turn ON/OFF", "5424994438780821530"),
-        ("Change API", "admin_ask_apic", "Send: <code>num https://api.xyz/num?number={query}</code>", "6138450100772411870"),
-        ("API Status", "admin_ask_apistatus", "Send: <code>num off Maintenance</code>", "6136281850957535879"),
+        ("API Manager", "admin_run_api", "Every API in one place — view URL, change URL, turn ON/OFF", "5424994438780821530"),
     ]),
     "media": ("Media", [
         ("Add Video", "admin_run_addvideo", "Send videos, then tap Done", "5424673243946557836"),
@@ -7174,7 +7186,7 @@ ADMIN_CMD_HINT = {
     "admin_setbc_info": "/setbc channel_id", "admin_run_removebc": "/removebc",
     "admin_run_listc": "/listc", "admin_ask_addc": "/addc", "admin_ask_removec": "/removec link",
     "admin_ask_renamec": "/renamec number Name", "admin_fjtoggle": "/unlockf = ON · /lockf = OFF",
-    "admin_run_api": "/api", "admin_ask_apic": "/apic num url", "admin_ask_apistatus": "/apistatus num off message",
+    "admin_run_api": "/api",
     "admin_run_addvideo": "/addvideo", "admin_run_addphoto": "/addphoto", "admin_run_done": "/done",
     "admin_ask_setmode": "/setmode video", "admin_run_listvideos": "/listvideos", "admin_run_listphotos": "/listphotos",
     "admin_run_delvideo": "/delvideo", "admin_run_delphoto": "/delphoto",
@@ -9839,6 +9851,8 @@ for _m, _f in (("send_message", ("text", "reply_markup")),
     if hasattr(bot, _m):
         setattr(bot, _m, _sc_wrap(getattr(bot, _m), _f))
 
+
+load_api_status()
 
 # remember Force Join ON/OFF across restarts
 FORCE_JOIN_ENABLED = bool(get_setting("force_join", True))
