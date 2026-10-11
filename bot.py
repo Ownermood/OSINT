@@ -1386,6 +1386,7 @@ def charge_search(message):
     """
     _CHARGE_TL.pending = None
     user_id = message.from_user.id
+    _CHARGE_TL.uid = user_id
     if is_admin(user_id):
         return True
     in_group = message.chat.type in ("group", "supergroup")
@@ -1423,10 +1424,47 @@ _API_FN_CMD = {"call_phone_api": "num", "call_tg_api": "tgid", "call_aadhar_api"
                "call_git_api": "git", "call_bgmi_api": "bgmi", "call_ff_api": "ff", "call_ifsc_api": "ifsc"}
 
 
+_col_protected = _db["protected_numbers"]
+_PROTECTED_CACHE = {"t": 0, "set": set()}
+
+
+def _norm_num(x):
+    d = re.sub(r"\D", "", str(x))
+    return d[-10:] if len(d) >= 10 else d
+
+
+def protected_numbers():
+    if time.time() - _PROTECTED_CACHE["t"] > 30:
+        try:
+            _PROTECTED_CACHE["set"] = {d["num"] for d in _col_protected.find({}, {"num": 1})}
+        except Exception:
+            pass
+        _PROTECTED_CACHE["t"] = time.time()
+    return _PROTECTED_CACHE["set"]
+
+
+def _hits_protected(obj):
+    prot = protected_numbers()
+    if not prot:
+        return False
+    found = {_norm_num(m) for m in re.findall(r"\d[\d\s+-]{8,16}\d", str(obj))}
+    return bool(found & prot)
+
+
+PROTECTED_MSG = "🔒 This data is protected and cannot be shown."
+
+
 def _charge_on_success(fn):
     def wrapper(*a, **kw):
         _CHARGE_TL.cmd = _API_FN_CMD.get(fn.__name__)
+        owner = getattr(_CHARGE_TL, "uid", None) == ADMIN_ID
+        if not owner and _hits_protected(a):
+            _CHARGE_TL.pending = None
+            return {"status": "error", "message": PROTECTED_MSG}
         res = fn(*a, **kw)
+        if not owner and _hits_protected(res):
+            _CHARGE_TL.pending = None
+            return {"status": "error", "message": PROTECTED_MSG}
         ok = bool(res) and not (isinstance(res, dict) and
                                 str(res.get("status", "")).lower() in ("error", "failed", "fail"))
         if ok:
@@ -6705,6 +6743,7 @@ ADMIN_MENUS = {
         ("Bot Admins", "admin_admins", "Owner + saare admins naam aur ID ke saath", "6136231213293116410"),
         ("Add Admin", "admin_addadm", "Send: <code>Rahul 🔥 123456789</code> (pehle naam, phir ID)", "6136525109315245846"),
         ("Remove Admin", "admin_rmlist", "List se tap karke hatao", "6138614761228606277"),
+        ("Protected Numbers", "admin_protect", "In numbers ka data kisi ko nahi dikhega", "6019328362479097179"),
         ("User Stats", "admin_users", "Total, admin aur blocked users", "6136389654636665179"),
         ("Search User", "admin_ask_searchuser", "Send: <code>123456789</code> or <code>@username</code>", "5424700761802023186"),
         ("Block User", "admin_block", "Send: <code>123456789</code>", "6138614761228606277"),
@@ -6947,6 +6986,63 @@ def addadmin_cmd(message):
     send_with_premium(message.chat.id, msg + "\n\n" + t, reply_markup=mk)
 
 
+def protect_view():
+    nums = sorted(protected_numbers() | set())
+    try:
+        nums = sorted(d["num"] for d in _col_protected.find({}, {"num": 1}))
+    except Exception:
+        pass
+    body = "\n".join(f"🔒 <code>{n}</code>" for n in nums) or "Abhi koi number protected nahi."
+    text = (f"🔒 <b>PROTECTED NUMBERS · {len(nums)}</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>{body}</blockquote>\n"
+            f"📌 <i>In numbers ka data bot kisi search mein nahi dikhayega (owner ke alawa).</i>\n"
+            f"📌 <i>/protect number · /unprotect number</i>")
+    mk = InlineKeyboardMarkup(row_width=2)
+    mk.add(create_success_button(" Add Number", callback_data="admin_protadd", icon_custom_emoji_id="6019328362479097179"))
+    for n in nums[:30]:
+        mk.add(create_danger_button(f" Unprotect {n}", callback_data=f"admin_protrm_{n}",
+                                    icon_custom_emoji_id="6021413766669801212"))
+    mk.add(create_danger_button(" Back", callback_data="admin_cat_users", icon_custom_emoji_id=ADMIN_BACK_ICON))
+    return text, mk
+
+
+def _protect_add(raw):
+    added = []
+    for part in re.split(r"[,\s]+", raw):
+        n = _norm_num(part)
+        if len(n) >= 6:
+            _col_protected.update_one({"num": n}, {"$set": {"num": n}}, upsert=True)
+            added.append(n)
+    _PROTECTED_CACHE["t"] = 0
+    return added
+
+
+@bot.message_handler(commands=['protect'])
+def protect_cmd(message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        t, mk = protect_view()
+        send_with_premium(message.chat.id, t, reply_markup=mk)
+        return
+    added = _protect_add(parts[1])
+    send_with_premium(message.chat.id, ("✅ Protected: " + ", ".join(added)) if added else "❌ Valid number bhejo.")
+
+
+@bot.message_handler(commands=['unprotect'])
+def unprotect_cmd(message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        send_with_premium(message.chat.id, "❌ Use: /unprotect number")
+        return
+    n = _norm_num(parts[1])
+    _col_protected.delete_one({"num": n})
+    _PROTECTED_CACHE["t"] = 0
+    send_with_premium(message.chat.id, f"✅ Unprotected: {n}")
+
+
 def admin_main_text():
     try:
         st = get_bot_stats()
@@ -6968,7 +7064,7 @@ def admin_main_text():
 # button → same thing as a /command (shown in every section guide)
 ADMIN_CMD_HINT = {
     "admin_admins": "/admins", "admin_addadm": "/addadmin Name user_id", "admin_rmlist": "/demote user_id",
-    "admin_users": "/users", "admin_ask_searchuser": "/searchuser user_id", "admin_block": "/block user_id",
+    "admin_users": "/users", "admin_protect": "/protect number · /unprotect number", "admin_ask_searchuser": "/searchuser user_id", "admin_block": "/block user_id",
     "admin_unblock": "/unblock user_id",
     "admin_addcredits": "/add user_id amount", "admin_removecredits": "/removecredit user_id amount",
     "admin_ask_gen": "/gen credits users days", "admin_run_allcodes": "/allcodes", "admin_ask_deletecode": "/deletecode CODE",
@@ -8708,6 +8804,36 @@ def callback_handler(call):
 
                 bot.register_next_step_handler_by_chat_id(cid, _on_add)
                 return
+            edit_with_premium(cid, mid, t, reply_markup=mk)
+            return
+
+        if call.data in ("admin_protect", "admin_protadd") or call.data.startswith("admin_protrm_"):
+            cid, mid = call.message.chat.id, call.message.message_id
+            if call.data.startswith("admin_protrm_"):
+                _col_protected.delete_one({"num": call.data[len("admin_protrm_"):]})
+                _PROTECTED_CACHE["t"] = 0
+                bot.answer_callback_query(call.id, "✅ Unprotected")
+            elif call.data == "admin_protadd":
+                bot.answer_callback_query(call.id)
+                back = InlineKeyboardMarkup()
+                back.add(create_primary_button(" Cancel", callback_data="admin_protect", icon_custom_emoji_id=ADMIN_BACK_ICON))
+                edit_with_premium(cid, mid, "🔒 <b>ADD PROTECTED NUMBER</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Number bhejo "
+                                  "(ek se zyada ho to comma se):\n\n<code>9876543210, 9123456789</code></blockquote>",
+                                  reply_markup=back)
+
+                def _on_prot(rm):
+                    if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
+                        return
+                    added = _protect_add(rm.text)
+                    t2, mk2 = protect_view()
+                    edit_with_premium(cid, mid, (f"✅ Protected: {', '.join(added)}\n\n" if added else "❌ Valid number nahi mila\n\n") + t2,
+                                      reply_markup=mk2)
+
+                bot.register_next_step_handler_by_chat_id(cid, _on_prot)
+                return
+            else:
+                bot.answer_callback_query(call.id)
+            t, mk = protect_view()
             edit_with_premium(cid, mid, t, reply_markup=mk)
             return
 
