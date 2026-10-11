@@ -6693,22 +6693,25 @@ ADMIN_MENUS = {
     "broadcast": ("Broadcast", [
         ("Broadcast", "admin_broadcast_info", "Koi bhi message — premium emoji, quote, photo sab", "6138680877955160519"),
         ("Broadcast + Button", "admin_bcbtn", "Message, phir <code>Join Now | https://t.me/xyz</code>", "6136367002979146040"),
-        ("Set BC Channel", "admin_setbc_info", "Send: <code>-1001234567890</code>", "6136446855011113722"),
-        ("Remove BC Channel", "admin_run_removebc", "Auto broadcast band", "6138587213308369167"),
         ("Delete Last Broadcast", "admin_delbc", "Aakhri broadcast sabke chat se delete", "6021413766669801212"),
+        ("Set BC Channel", "admin_setbc_info", "Is channel ki post auto sabko → <code>-1001234567890</code>", "6136446855011113722"),
+        ("Remove BC Channel", "admin_run_removebc", "Auto broadcast band", "6138587213308369167"),
     ]),
     "channels": ("Force Join", [
+        ("List Channels", "admin_run_listc", "Saare force join channels", "6136663351427603393"),
         ("Add Channel", "admin_ask_addc", "Chat ID, phir link — bot step by step puchega", "6136525109315245846"),
         ("Remove Channel", "admin_ask_removec", "Send: <code>https://t.me/xyz</code>", "6138614761228606277"),
-        ("List Channels", "admin_run_listc", "Saare force join channels", "6136663351427603393"),
         ("Button Name", "admin_ask_renamec", "Send: <code>1 Villan Community</code>", "6136165822416033423"),
-        ("Join Message", "admin_joinmsg", "Apna join message · <code>reset</code> = default", "6136389654636665179"),
         ("Force Join ON", "admin_run_lockf", "Join zaroori", "6136326046171011765"),
         ("Force Join OFF", "admin_run_unlockf", "Join zaroori nahi", "6136198846419572252"),
     ]),
+    "messages": ("Messages", [
+        ("Welcome Message", "admin_welcome", "Apna /start message · <code>{name}</code> <code>{id}</code> <code>{credits}</code> <code>{free}</code>", "5424611538151437896"),
+        ("Join Message", "admin_joinmsg", "Force join ka message · <code>reset</code> = default", "6136389654636665179"),
+    ]),
     "api": ("API", [
-        ("List APIs", "admin_run_api", "Saari APIs", "5424994438780821530"),
-        ("Change API", "admin_ask_apic", "Send: <code>num https://api.xyz/num?q={query}</code>", "6138450100772411870"),
+        ("API Manager", "admin_run_api", "Har API ka URL dekho, badlo, ON/OFF", "5424994438780821530"),
+        ("Change API", "admin_ask_apic", "Send: <code>num https://api.xyz/num?number={query}</code>", "6138450100772411870"),
         ("API Status", "admin_ask_apistatus", "Send: <code>num off Maintenance</code>", "6136281850957535879"),
     ]),
     "media": ("Media", [
@@ -6725,7 +6728,6 @@ ADMIN_MENUS = {
         ("Stats", "admin_stats", "Bot ke poore stats", "6136231213293116410"),
         ("Command Stats", "admin_run_commands", "Kaunsi command kitni chali", "6136389654636665179"),
         ("Uptime", "admin_run_uptime", "Bot kab se chal raha", "6138579366403119002"),
-        ("Welcome Message", "admin_welcome", "Apna /start message · <code>{name}</code> <code>{id}</code> <code>{credits}</code>", "5424611538151437896"),
         ("Lock Bot", "admin_run_lock", "Sirf admin use kar paye", "6138614761228606277"),
         ("Unlock Bot", "admin_run_unlock", "Sab use kar paye", "6136198451282581752"),
     ]),
@@ -6735,7 +6737,7 @@ ADMIN_CAT_ICONS = {
     "users": "5424611538151437896", "credits": "6136159783692017451",
     "broadcast": "6138680877955160519", "channels": "6136367002979146040",
     "api": "5424994438780821530", "media": "5424673243946557836",
-    "bot": "6136165822416033423",
+    "bot": "6136165822416033423", "messages": "6019107055699236857",
 }
 ADMIN_BACK_ICON = "6138930810692049889"
 ADMIN_HOME_ICON = "6136231213293116410"
@@ -6818,8 +6820,21 @@ def _run_in_place(fn, msg, chat_id, message_id, cat):
 
 
 def admin_main_text():
-    return (f"<blockquote>{te(ADMIN_HOME_ICON, '🏆')} <b>{sc('Admin Panel')}</b> {te(ADMIN_HOME_ICON, '🏆')}</blockquote>\n"
-            f"<blockquote>{te('6138500424904219564', '➡️')} {sc('Choose a section below')}</blockquote>")
+    try:
+        st = get_bot_stats()
+    except Exception:
+        st = {}
+    I = lambda i, f: te(i, f)
+    return (
+        f"<blockquote>{I(ADMIN_HOME_ICON, '🏆')} <b>{sc('Admin Panel')}</b> {I(ADMIN_HOME_ICON, '🏆')}</blockquote>\n"
+        f"<blockquote>{I('6136389654636665179', '📰')} <b>{sc('Dashboard')}</b>\n\n"
+        f"{I('5424611538151437896', '👋')} {sc('Total Users')} : <b>{st.get('total_users', 0)}</b>\n"
+        f"{I('6136525109315245846', '✨')} {sc('New Today')} : <b>{st.get('today_users', 0)}</b>\n"
+        f"{I('6136326046171011765', '⚡')} {sc('Active 24h')} : <b>{st.get('active_users', 0)}</b>\n"
+        f"{I('6136159783692017451', '💰')} {sc('Total Credits')} : <b>{st.get('total_credits', 0)}</b>\n"
+        f"{I('6136231213293116410', '🏆')} {sc('Searches')} : <b>{st.get('total_commands', 0)}</b></blockquote>\n"
+        f"<blockquote>{I('6138500424904219564', '➡️')} {sc('Choose a section below')}</blockquote>"
+    )
 
 
 def admin_cat_text(cat):
@@ -6939,20 +6954,7 @@ def admin_panel(message):
     chat_id = message.chat.id
     stats   = get_bot_stats()
 
-    text = (
-        "<blockquote>"
-        "<b>\U0001f451 ADMIN PANEL</b>\n"
-        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\n"
-        f"\U0001f465 <b>Total Users</b>   : <code>{stats.get('total_users', 0)}</code>\n"
-        f"\U0001f4c5 <b>New Today</b>     : <code>{stats.get('today_users', 0)}</code>\n"
-        f"\U0001f7e2 <b>Active (24h)</b>  : <code>{stats.get('active_users', 0)}</code>\n"
-        f"\U0001f4b0 <b>Total Credits</b> : <code>{stats.get('total_credits', 0)}</code>\n"
-        f"\u26a1 <b>Commands Used</b> : <code>{stats.get('total_commands', 0)}</code>\n"
-        f"\U0001f517 <b>Referrals</b>     : <code>{stats.get('total_referrals', 0)}</code>\n"
-        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
-        "</blockquote>"
-    )
-
+    text = admin_main_text()
     markup = admin_menu_markup()
 
     send_with_premium(chat_id, text, reply_markup=markup)
@@ -8428,19 +8430,19 @@ def callback_handler(call):
                 "<code>{name}</code> = user ka naam\n<code>{id}</code> = user ID\n<code>{credits}</code> = credits\n\n"
                 "Example: <i>Hey {name}! Welcome to Villan OSINT Bot. Your credits: {credits}</i>\n\n"
                 "<code>reset</code> bhejo to default wapas.</blockquote>",
-                parse_mode="HTML", reply_markup=admin_back_markup("bot"))
+                parse_mode="HTML", reply_markup=admin_back_markup("messages"))
 
             def _on_wm(rm):
                 if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
-                    bot.send_message(rm.chat.id, "❌ Cancelled.", reply_markup=admin_back_markup("bot"))
+                    bot.send_message(rm.chat.id, "❌ Cancelled.", reply_markup=admin_back_markup("messages"))
                     return
                 if rm.text.strip().lower() == "reset":
                     set_setting("welcome_text", None)
-                    bot.send_message(rm.chat.id, "✅ Default welcome message set.", reply_markup=admin_back_markup("bot"))
+                    bot.send_message(rm.chat.id, "✅ Default welcome message set.", reply_markup=admin_back_markup("messages"))
                     return
                 html = getattr(rm, "html_text", None) or rm.text
                 set_setting("welcome_text", html)
-                bot.send_message(rm.chat.id, "✅ Welcome message saved. /start karke dekho.", reply_markup=admin_back_markup("bot"))
+                bot.send_message(rm.chat.id, "✅ Welcome message saved. /start karke dekho.", reply_markup=admin_back_markup("messages"))
 
             bot.register_next_step_handler(prompt, _on_wm)
             return
@@ -8468,19 +8470,19 @@ def callback_handler(call):
                 call.message.chat.id,
                 "<blockquote><b>📝 Join Message</b>\n\nNaya force join message bhejo "
                 "(premium emoji, bold, quote sab chalega).\n<code>reset</code> bhejo to default design wapas.</blockquote>",
-                parse_mode="HTML", reply_markup=admin_back_markup("channels"))
+                parse_mode="HTML", reply_markup=admin_back_markup("messages"))
 
             def _on_jm(rm):
                 if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
-                    bot.send_message(rm.chat.id, "❌ Cancelled.", reply_markup=admin_back_markup("channels"))
+                    bot.send_message(rm.chat.id, "❌ Cancelled.", reply_markup=admin_back_markup("messages"))
                     return
                 if rm.text.strip().lower() == "reset":
                     set_setting("join_text", None)
-                    bot.send_message(rm.chat.id, "✅ Default join message set.", reply_markup=admin_back_markup("channels"))
+                    bot.send_message(rm.chat.id, "✅ Default join message set.", reply_markup=admin_back_markup("messages"))
                     return
                 html = getattr(rm, "html_text", None) or rm.text
                 set_setting("join_text", html)
-                bot.send_message(rm.chat.id, "✅ Join message saved. Preview 👇", reply_markup=admin_back_markup("channels"))
+                bot.send_message(rm.chat.id, "✅ Join message saved. Preview 👇", reply_markup=admin_back_markup("messages"))
                 try:
                     send_with_premium(rm.chat.id, html)
                 except Exception as e:
