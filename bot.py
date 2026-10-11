@@ -1663,14 +1663,14 @@ def redeem_credits(user_id, code):
             _col_code_usage.insert_one({"code": code, "user_id": user_id,
                                         "used_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         except DuplicateKeyError:
-            return False, "You have already used this redeem code! Each code can be used only once per user."
+            return False, "You have already redeemed this code. Each code works once per user."
         # 2) atomically take one slot, only if slots are left
         r = _col_codes.update_one({"code": code, "is_active": 1,
                                    "$expr": {"$lt": ["$used_count", "$max_uses"]}},
                                   {"$inc": {"used_count": 1}})
         if r.modified_count != 1:
             _col_code_usage.delete_one({"code": code, "user_id": user_id})
-            return False, "Code max usage reached! This code has been fully used."
+            return False, "This code has expired — all claims are used up."
         # 3) credit
         credits = doc["credits"]
         _col_users.update_one({"user_id": user_id}, {"$inc": {"credits": credits}})
@@ -6702,7 +6702,7 @@ ADMIN_MENUS = {
     "credits": ("Credits & Codes", [
         ("Add Credits", "admin_addcredits", "Send: <code>123456789 50</code>", "6136159783692017451"),
         ("Remove Credits", "admin_removecredits", "Send: <code>123456789 20</code>", "6138807244482943562"),
-        ("Redeem Codes", "admin_codes", "Create, view and delete codes — step by step", "6136204644625423818"),
+        ("Redeem Codes", "admin_codes", "Create, view and delete codes — code, credits, users", "6136204644625423818"),
         ("Pricing", "admin_pricing", "Change plan prices (Weekly / Monthly / Protect)", "6136159783692017451"),
     ]),
     "broadcast": ("Broadcast", [
@@ -8969,21 +8969,11 @@ def callback_handler(call):
                     ask("❌ Send a number above 0.\n\n<b>Step 3:</b> max claims, e.g. <code>10</code>", s3)
                     return
                 st["max"] = int(rm.text)
-                ask(f"Code: <code>{st['code']}</code> · {st['credits']} credits · {st['max']} users\n\n"
-                    f"<b>Step 4:</b> valid for how many days? <code>0</code> = never expires", s4)
-
-            def s4(rm):
-                if _bad(rm):
-                    return
-                if not rm.text.strip().isdigit():
-                    ask("❌ Send a number.\n\n<b>Step 4:</b> days, <code>0</code> = never expires", s4)
-                    return
-                days = int(rm.text)
-                exp = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S") if days else None
-                ok, m = create_redeem_code(st["code"], st["credits"], st["max"], exp, rm.from_user.id)
+                # no expiry date: the code ends when all claims are used
+                ok, m = create_redeem_code(st["code"], st["credits"], st["max"], None, rm.from_user.id)
                 t, mk = codes_view()
                 done = (f"✅ <b>Code created!</b>\n<blockquote>🎟 <code>{st['code']}</code>\n💰 {st['credits']} credits · "
-                        f"👥 {st['max']} users · ⏳ {'never' if not days else str(days) + ' days'}</blockquote>\n\n") if ok else f"❌ {m}\n\n"
+                        f"👥 {st['max']} users</blockquote>\n\n") if ok else f"❌ {m}\n\n"
                 edit_with_premium(cid, mid, done + t, reply_markup=mk)
 
             ask("<b>Step 1:</b> send the code, e.g. <code>DIWALI100</code>\n<b>Random:</b> send <code>auto</code> for a random code\n\n"
