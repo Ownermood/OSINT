@@ -7113,6 +7113,16 @@ def _code_line(d):
             f"{ok} Claimed: <b>{used}/{mx}</b>{tail}{exp_s}")
 
 
+def _copy_btn(label, text):
+    b = InlineKeyboardButton(text=label, copy_text=types.CopyTextButton(text=text))
+    try:
+        b.style = "success"
+        b.icon_custom_emoji_id = "6019175208240289774"
+    except Exception:
+        pass
+    return b
+
+
 def codes_view():
     try:
         docs = list(_col_codes.find({"is_active": 1}).sort("_id", -1).limit(20))
@@ -7122,9 +7132,10 @@ def codes_view():
     text = f"🎟 <b>REDEEM CODES · {len(docs)}</b>\n━━━━━━━━━━━━━━━━━━━━\n{body}"
     mk = InlineKeyboardMarkup(row_width=1)
     for d in docs:
-        mk.add(create_danger_button(f" Delete {d['code']}", callback_data=f"admin_codedel_{d['code']}",
+        mk.row(_copy_btn(f" Copy {d['code']}", d["code"]),
+               create_danger_button(f" Delete {d['code']}", callback_data=f"admin_codedel_{d['code']}",
                                     icon_custom_emoji_id="6019102674832595118"))
-    mk.add(create_success_button(" New Code", callback_data="admin_codenew", icon_custom_emoji_id="6136204644625423818"))
+    mk.add(create_primary_button(" New Code", callback_data="admin_codenew", icon_custom_emoji_id="6136204644625423818"))
     mk.add(create_danger_button(" Back", callback_data="admin_cat_credits", icon_custom_emoji_id=ADMIN_BACK_ICON))
     return text, mk
 
@@ -8989,8 +9000,11 @@ def callback_handler(call):
                 # no expiry date: the code ends when all claims are used
                 ok, m = create_redeem_code(st["code"], st["credits"], st["max"], None, rm.from_user.id)
                 t, mk = codes_view()
+                if ok:
+                    mk.keyboard.insert(0, [_copy_btn(f" Copy Code: {st['code']}", st["code"])])
                 done = (f"✅ <b>Code created!</b>\n<blockquote>🎟 <code>{st['code']}</code>\n💰 {st['credits']} credits · "
-                        f"👥 {st['max']} users</blockquote>\n\n") if ok else f"❌ {m}\n\n"
+                        f"👥 {st['max']} users\n\nUsers redeem with: <code>/redeem {st['code']}</code></blockquote>\n"
+                        f"📌 <i>Tap the code or the Copy button to copy it.</i>\n\n") if ok else f"❌ {m}\n\n"
                 edit_with_premium(cid, mid, done + t, reply_markup=mk)
 
             ask("<b>Step 1:</b> send the code, e.g. <code>DIWALI100</code>\n<b>Random:</b> send <code>auto</code> for a random code\n\n"
@@ -9705,6 +9719,9 @@ def _sc_wrap(method, fields):
             if is_result and method.__name__ in ("send_message", "send_photo", "send_document"):
                 _delete_later(res, RESULT_DELETE_TIME)
                 _RESULT_TL.t = time.time()
+            elif method.__name__ in ("send_message", "send_photo", "send_video", "send_animation", "send_document") \
+                    and getattr(getattr(res, "chat", None), "type", "") in ("group", "supergroup"):
+                _delete_later(res, GROUP_DELETE_TIME)   # keep groups clean: every bot message goes
             elif is_result and method.__name__ in ("edit_message_text", "edit_message_caption"):
                 _delete_later(res, RESULT_DELETE_TIME, extend=True)   # Next/Prev page: restart the 1-min timer
             elif method.__name__ in ("send_photo", "send_video", "send_animation", "send_document") \
@@ -9724,6 +9741,7 @@ def _sc_wrap(method, fields):
 
 
 RESULT_DELETE_TIME = 60   # search results auto-delete (PM + group)
+GROUP_DELETE_TIME = 60    # any other bot message in a group
 _RESULT_TL = threading.local()
 _RESULT_MARKERS = ("Lᴇꜰᴛ", "ʟᴇꜰᴛ", "Credits Left", "CREDITS LEFT", "Credits left",
                    "Pᴏᴡᴇʀᴇᴅ Bʏ", "Powered By", "POWERED BY")
@@ -9899,6 +9917,16 @@ if __name__ == "__main__":
 
     threading.Thread(target=_protection_expiry_loop, daemon=True).start()
     threading.Thread(target=_autodelete_loop, daemon=True).start()
+
+    def _group_cmd_cleaner(messages):
+        for m in messages:
+            try:
+                if m.chat.type in ("group", "supergroup") and (m.text or "").startswith("/"):
+                    _queue_delete(m.chat.id, m.message_id, GROUP_DELETE_TIME)
+            except Exception:
+                pass
+
+    bot.set_update_listener(_group_cmd_cleaner)
 
     try:
         bot.polling(non_stop=True, skip_pending=True, timeout=15)
