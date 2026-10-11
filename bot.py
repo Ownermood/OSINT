@@ -1645,11 +1645,10 @@ def record_code_usage(code, user_id):
         return False
 
 def redeem_credits(user_id, code):
+    """Race-safe: one claim per user, never more claims than max_uses, credit only after both pass."""
     try:
         if not _col_users.find_one({"user_id": user_id}):
             return False, "User not found! Please /start first."
-        if _col_code_usage.find_one({"code": code, "user_id": user_id}):
-            return False, "You have already used this redeem code! Each code can be used only once per user."
         doc = _col_codes.find_one({"code": code})
         if not doc:
             return False, "Invalid code! Code does not exist."
@@ -1657,26 +1656,29 @@ def redeem_credits(user_id, code):
             return False, "Code is inactive! Contact admin."
         expiry_date = doc.get("expiry_date")
         if expiry_date:
-            expiry = datetime.strptime(expiry_date, "%Y-%m-%d %H:%M:%S")
-            if expiry < datetime.now():
+            if datetime.strptime(expiry_date, "%Y-%m-%d %H:%M:%S") < datetime.now():
                 return False, "Code expired!"
-        if doc.get("used_count", 0) >= doc["max_uses"]:
+        # 1) reserve this user's single use (unique index code+user_id)
+        try:
+            _col_code_usage.insert_one({"code": code, "user_id": user_id,
+                                        "used_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+        except DuplicateKeyError:
+            return False, "You have already used this redeem code! Each code can be used only once per user."
+        # 2) atomically take one slot, only if slots are left
+        r = _col_codes.update_one({"code": code, "is_active": 1,
+                                   "$expr": {"$lt": ["$used_count", "$max_uses"]}},
+                                  {"$inc": {"used_count": 1}})
+        if r.modified_count != 1:
+            _col_code_usage.delete_one({"code": code, "user_id": user_id})
             return False, "Code max usage reached! This code has been fully used."
+        # 3) credit
         credits = doc["credits"]
         _col_users.update_one({"user_id": user_id}, {"$inc": {"credits": credits}})
-        try:
-            _col_code_usage.insert_one({
-                "code": code, "user_id": user_id,
-                "used_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            })
-        except DuplicateKeyError:
-            pass
-        _col_codes.update_one({"code": code}, {"$inc": {"used_count": 1}})
         new_balance = get_credits(user_id)
         return True, f"Successfully redeemed {credits} credits! New balance: {new_balance}"
     except Exception as e:
         print(f"Redeem error: {e}")
-        return False, f"Error: {str(e)}"
+        return False, "Something went wrong. Please try again."
 
 def create_redeem_code(code, credits, max_uses, expiry_date, admin_id):
     try:
@@ -5650,6 +5652,8 @@ def start_cmd(message):
     if is_admin(user_id) or user_protections(user_id):
         markup.add(create_success_button(" My Protection", callback_data="myprotect",
                                          icon_custom_emoji_id="6019328362479097179"))
+    markup.add(create_primary_button(" Refer & Earn", callback_data="refer",
+                                     icon_custom_emoji_id="5424968454228680999"))
     markup.add(create_success_button(" Buy Credits / Protect Number", callback_data="buyplans",
                                      icon_custom_emoji_id="6048770006810893912"))
     markup.add(create_success_button(" Add Bot To Group", url=f"https://t.me/{bot_username}?startgroup=start",
@@ -6691,9 +6695,7 @@ ADMIN_MENUS = {
     "credits": ("Credits & Codes", [
         ("Add Credits", "admin_addcredits", "Send: <code>123456789 50</code>", "6136159783692017451"),
         ("Remove Credits", "admin_removecredits", "Send: <code>123456789 20</code>", "6138807244482943562"),
-        ("Gen Code", "admin_ask_gen", "Credits · users · days → <code>50 10 30</code>", "6136204644625423818"),
-        ("All Codes", "admin_run_allcodes", "All redeem codes", "6136663351427603393"),
-        ("Delete Code", "admin_ask_deletecode", "Send: <code>ABC123XY</code>", "5425036812928164275"),
+        ("Redeem Codes", "admin_codes", "Create, view and delete codes — step by step", "6136204644625423818"),
         ("Pricing", "admin_pricing", "Change plan prices (Weekly / Monthly / Protect)", "6136159783692017451"),
     ]),
     "broadcast": ("Broadcast", [
@@ -7075,6 +7077,34 @@ def setprice_cmd(message):
     send_with_premium(message.chat.id, "✅ Price updated!\n\n" + t, reply_markup=mk)
 
 
+def _code_line(d):
+    used, mx = d.get("used_count", 0), d.get("max_uses", 0)
+    exp = d.get("expiry_date")
+    expired = bool(exp) and datetime.strptime(exp, "%Y-%m-%d %H:%M:%S") < datetime.now()
+    state = "used up" if used >= mx else ("expired" if expired else "")
+    ok = "✅" if not state else "⚠️"
+    tail = f" · {state}" if state else ""
+    exp_s = f"\n⏳ Expires: {exp[:10]}" if exp else ""
+    return (f"🎟 Code: <code>{d['code']}</code>\n💰 Amount: <b>{d.get('credits', 0)} credits</b>\n"
+            f"{ok} Claimed: <b>{used}/{mx}</b>{tail}{exp_s}")
+
+
+def codes_view():
+    try:
+        docs = list(_col_codes.find({"is_active": 1}).sort("_id", -1).limit(20))
+    except Exception:
+        docs = []
+    body = "\n".join(f"<blockquote>{_code_line(d)}</blockquote>" for d in docs) or "<blockquote>No codes yet. Tap New Code.</blockquote>"
+    text = f"🎟 <b>REDEEM CODES · {len(docs)}</b>\n━━━━━━━━━━━━━━━━━━━━\n{body}"
+    mk = InlineKeyboardMarkup(row_width=1)
+    for d in docs:
+        mk.add(create_danger_button(f" Delete {d['code']}", callback_data=f"admin_codedel_{d['code']}",
+                                    icon_custom_emoji_id="6019102674832595118"))
+    mk.add(create_success_button(" New Code", callback_data="admin_codenew", icon_custom_emoji_id="6136204644625423818"))
+    mk.add(create_danger_button(" Back", callback_data="admin_cat_credits", icon_custom_emoji_id=ADMIN_BACK_ICON))
+    return text, mk
+
+
 def admin_main_text():
     try:
         st = get_bot_stats()
@@ -7100,7 +7130,7 @@ ADMIN_CMD_HINT = {
     "admin_startpic": "/setpic url · /setpic off", "admin_ask_searchuser": "/searchuser user_id", "admin_block": "/block user_id",
     "admin_unblock": "/unblock user_id",
     "admin_addcredits": "/add user_id amount", "admin_removecredits": "/removecredit user_id amount",
-    "admin_ask_gen": "/gen credits users days", "admin_run_allcodes": "/allcodes", "admin_ask_deletecode": "/deletecode CODE", "admin_pricing": "/setprice weekly PRICE",
+    "admin_codes": "/gen credits users days · /allcodes · /deletecode CODE", "admin_pricing": "/setprice weekly PRICE",
     "admin_broadcast_info": "/broadcast text  (ya message pe reply)", "admin_bcbtn": "/broadcastbtn Text | link  (message pe reply)",
     "admin_setbc_info": "/setbc channel_id", "admin_run_removebc": "/removebc",
     "admin_run_listc": "/listc", "admin_ask_addc": "/addc", "admin_ask_removec": "/removec link",
@@ -8873,6 +8903,84 @@ def callback_handler(call):
                 bot.register_next_step_handler_by_chat_id(cid, _on_add)
                 return
             edit_with_premium(cid, mid, t, reply_markup=mk)
+            return
+
+        if call.data == "admin_codes" or call.data.startswith("admin_codedel_"):
+            cid, mid = call.message.chat.id, call.message.message_id
+            if call.data.startswith("admin_codedel_"):
+                ok, _m = delete_redeem_code(call.data[len("admin_codedel_"):], call.from_user.id)
+                bot.answer_callback_query(call.id, "✅ Code deleted" if ok else "❌ Not found")
+            else:
+                bot.answer_callback_query(call.id)
+            t, mk = codes_view()
+            edit_with_premium(cid, mid, t, reply_markup=mk)
+            return
+
+        if call.data == "admin_codenew":
+            cid, mid = call.message.chat.id, call.message.message_id
+            bot.answer_callback_query(call.id)
+            cancel = InlineKeyboardMarkup()
+            cancel.add(create_danger_button(" Cancel", callback_data="admin_codes", icon_custom_emoji_id=ADMIN_BACK_ICON))
+            st = {}
+            head = "🎟 <b>CREATE REDEEM CODE</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+
+            def ask(step_text, handler):
+                edit_with_premium(cid, mid, head + f"<blockquote>{step_text}</blockquote>", reply_markup=cancel)
+                bot.register_next_step_handler_by_chat_id(cid, handler)
+
+            def _bad(rm):
+                return not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/")
+
+            def s1(rm):
+                if _bad(rm):
+                    return
+                c = rm.text.strip().upper()
+                if c == "AUTO":
+                    c = "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
+                if not re.fullmatch(r"[A-Z0-9]{3,20}", c):
+                    ask("❌ Letters and numbers only, 3–20 characters.\n\n<b>Step 1:</b> send the code, e.g. <code>DIWALI100</code>\nor send <code>auto</code> for a random code", s1)
+                    return
+                if _col_codes.find_one({"code": c}):
+                    ask(f"❌ <code>{c}</code> already exists.\n\n<b>Step 1:</b> send another code or <code>auto</code>", s1)
+                    return
+                st["code"] = c
+                ask(f"Code: <code>{c}</code>\n\n<b>Step 2:</b> how many credits per claim? e.g. <code>10</code>", s2)
+
+            def s2(rm):
+                if _bad(rm):
+                    return
+                if not rm.text.strip().isdigit() or int(rm.text) <= 0:
+                    ask("❌ Send a number above 0.\n\n<b>Step 2:</b> credits per claim, e.g. <code>10</code>", s2)
+                    return
+                st["credits"] = int(rm.text)
+                ask(f"Code: <code>{st['code']}</code> · {st['credits']} credits\n\n<b>Step 3:</b> how many users can claim? e.g. <code>10</code>", s3)
+
+            def s3(rm):
+                if _bad(rm):
+                    return
+                if not rm.text.strip().isdigit() or int(rm.text) <= 0:
+                    ask("❌ Send a number above 0.\n\n<b>Step 3:</b> max claims, e.g. <code>10</code>", s3)
+                    return
+                st["max"] = int(rm.text)
+                ask(f"Code: <code>{st['code']}</code> · {st['credits']} credits · {st['max']} users\n\n"
+                    f"<b>Step 4:</b> valid for how many days? <code>0</code> = never expires", s4)
+
+            def s4(rm):
+                if _bad(rm):
+                    return
+                if not rm.text.strip().isdigit():
+                    ask("❌ Send a number.\n\n<b>Step 4:</b> days, <code>0</code> = never expires", s4)
+                    return
+                days = int(rm.text)
+                exp = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S") if days else None
+                ok, m = create_redeem_code(st["code"], st["credits"], st["max"], exp, rm.from_user.id)
+                t, mk = codes_view()
+                done = (f"✅ <b>Code created!</b>\n<blockquote>🎟 <code>{st['code']}</code>\n💰 {st['credits']} credits · "
+                        f"👥 {st['max']} users · ⏳ {'never' if not days else str(days) + ' days'}</blockquote>\n\n") if ok else f"❌ {m}\n\n"
+                edit_with_premium(cid, mid, done + t, reply_markup=mk)
+
+            ask("<b>Step 1:</b> send the code, e.g. <code>DIWALI100</code>\n<b>Random:</b> send <code>auto</code> for a random code\n\n"
+                "<i>Letters and numbers only, 3–20 characters.</i>", s1)
             return
 
         if call.data == "admin_pricing" or call.data.startswith("admin_setprice_"):
