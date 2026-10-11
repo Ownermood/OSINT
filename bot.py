@@ -6716,8 +6716,7 @@ ADMIN_MENUS = {
         ("Add Channel", "admin_ask_addc", "Chat ID, phir link — bot step by step puchega", "6136525109315245846"),
         ("Remove Channel", "admin_ask_removec", "Send: <code>https://t.me/xyz</code>", "6138614761228606277"),
         ("Button Name", "admin_ask_renamec", "Send: <code>1 Villan Community</code>", "6136165822416033423"),
-        ("Force Join ON", "admin_run_lockf", "Join zaroori", "6136326046171011765"),
-        ("Force Join OFF", "admin_run_unlockf", "Join zaroori nahi", "6136198846419572252"),
+        ("Force Join", "admin_fjtoggle", "Tap = ON/OFF. ON = channel join kiye bina bot nahi chalega", "6136326046171011765"),
     ]),
     "messages": ("Messages", [
         ("Welcome Message", "admin_welcome", "Apna /start message · <code>{name}</code> <code>{id}</code> <code>{credits}</code> <code>{free}</code>", "5424611538151437896"),
@@ -6854,7 +6853,9 @@ def admin_main_text():
 def admin_cat_text(cat):
     title, items = ADMIN_MENUS[cat]
     lines = [f"<blockquote>{te(ADMIN_CAT_ICONS[cat], '⭐')} <b>{sc(title)}</b></blockquote>", "<blockquote>"]
-    for label, _, desc, ic in items:
+    for label, d, desc, ic in items:
+        if d == "admin_fjtoggle":
+            label = "Force Join: ON" if FORCE_JOIN_ENABLED else "Force Join: OFF"
         lines.append(f"{te(ic, '⭐')} <b>{sc(label)}</b>\n      {desc}\n")
     lines.append("</blockquote>")
     return "\n".join(lines)
@@ -6867,8 +6868,17 @@ def admin_menu_markup(cat=None):
                                       icon_custom_emoji_id=ADMIN_CAT_ICONS[k])
                 for k, (title, _) in ADMIN_MENUS.items()]
     else:
-        btns = [create_primary_button(" " + sc(t), callback_data=d, icon_custom_emoji_id=ic)
-                for t, d, _, ic in ADMIN_MENUS[cat][1]]
+        btns = []
+        for t, d, _, ic in ADMIN_MENUS[cat][1]:
+            if d == "admin_fjtoggle":
+                if FORCE_JOIN_ENABLED:
+                    btns.append(create_success_button(" " + sc("Force Join: ON") + "  (tap = OFF)", callback_data=d,
+                                                      icon_custom_emoji_id="6019175208240289774"))
+                else:
+                    btns.append(create_danger_button(" " + sc("Force Join: OFF") + "  (tap = ON)", callback_data=d,
+                                                     icon_custom_emoji_id="6019102674832595118"))
+            else:
+                btns.append(create_primary_button(" " + sc(t), callback_data=d, icon_custom_emoji_id=ic))
     markup.add(*btns)
     if cat is not None:
         markup.add(create_danger_button(" " + sc("Back"), callback_data="admin_cat_main",
@@ -7881,6 +7891,7 @@ def lock_force_join_cmd(message):
         send_with_premium(message.chat.id, "❌ Admin only!")
         return
     FORCE_JOIN_ENABLED = False
+    set_setting("force_join", False)
     send_with_premium(message.chat.id, "🔓 FORCE JOIN DISABLED 🔓")
 
 @bot.message_handler(commands=['unlockf'])
@@ -7891,6 +7902,8 @@ def unlock_force_join_cmd(message):
         send_with_premium(message.chat.id, "❌ Admin only!")
         return
     FORCE_JOIN_ENABLED = True
+    set_setting("force_join", True)
+    _MEMBER_OK.clear()
     send_with_premium(message.chat.id, "🔒 FORCE JOIN ENABLED 🔒")
 
 admin_adding_media = {}
@@ -8507,6 +8520,18 @@ def callback_handler(call):
                 bot.send_message(rm.chat.id, "✅ Welcome message saved. /start karke dekho.", reply_markup=admin_back_markup("messages"))
 
             bot.register_next_step_handler(prompt, _on_wm)
+            return
+
+        if call.data == "admin_fjtoggle":
+            FORCE_JOIN_ENABLED = not FORCE_JOIN_ENABLED
+            set_setting("force_join", FORCE_JOIN_ENABLED)
+            _MEMBER_OK.clear()
+            bot.answer_callback_query(call.id, "✅ Force Join ON" if FORCE_JOIN_ENABLED else "⛔ Force Join OFF")
+            try:
+                bot.edit_message_text(admin_cat_text("channels"), call.message.chat.id, call.message.message_id,
+                                      parse_mode="HTML", reply_markup=admin_menu_markup("channels"))
+            except Exception:
+                pass
             return
 
         if call.data == "admin_delbc":
@@ -9185,6 +9210,9 @@ for _m, _f in (("send_message", ("text", "reply_markup")),
     if hasattr(bot, _m):
         setattr(bot, _m, _sc_wrap(getattr(bot, _m), _f))
 
+
+# remember Force Join ON/OFF across restarts
+FORCE_JOIN_ENABLED = bool(get_setting("force_join", True))
 
 # charge a search only when its API returned a result
 for _fname in [n for n in list(globals()) if n.startswith("call_") and n.endswith("_api")]:
