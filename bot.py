@@ -3342,9 +3342,9 @@ def format_number_result(result, query, credits_left):
         txt += divider
 
         txt += (
-            f"{te(e['status_ok'], '✅')} Nᴜᴍʙᴇʀ Dᴀᴛᴀʙᴀꜱᴇ {te(e['status_ok'], '✅')}\n"
+            f"<blockquote>{te(e['status_ok'], '✅')} Nᴜᴍʙᴇʀ Dᴀᴛᴀʙᴀꜱᴇ {te(e['status_ok'], '✅')}\n"
             f"{te(e['query'],   '🔭')} Qᴜᴇʀʏ    : <code>{result.get('number', query)}</code>\n"
-            f"{te(e['records'], '✍️')} Rᴇᴄᴏʀᴅꜱ  : {total} | Page {page_num}/{total_pages}\n"
+            f"{te(e['records'], '✍️')} Rᴇᴄᴏʀᴅꜱ  : {total} | Page {page_num}/{total_pages}</blockquote>\n"
         )
 
         for r_idx, record in enumerate(page_records):
@@ -3358,7 +3358,7 @@ def format_number_result(result, query, credits_left):
             def _field(val):
                 return val if val and str(val).strip() not in ("N/A", "None", "null", "") else "—"
 
-            txt += f"{te(e['number'],  '📲')} <b>Nᴜᴍʙᴇʀ</b>    : <code>{_field(record.get('mobile'))}</code>\n"
+            txt += f"<blockquote>{te(e['number'],  '📲')} <b>Nᴜᴍʙᴇʀ</b>    : <code>{_field(record.get('mobile'))}</code>\n"
             txt += f"{te(e['name'],    '👤')} <b>Nᴀᴍᴇ</b>      : {_field(record.get('name'))}\n"
             _tc = _field(record.get('truecaller_name'))
             if _tc != "—": txt += f"{te(e['name'], '📛')} <b>TC Nᴀᴍᴇ</b>   : {_tc}\n"
@@ -3367,7 +3367,7 @@ def format_number_result(result, query, credits_left):
             txt += f"{te(e['circle'],  '🔎')} <b>Cɪʀᴄʟᴇ</b>    : {_field(record.get('circle'))}\n"
             txt += f"{te(e['address'], '🏡')} <b>Aᴅᴅʀᴇꜱꜱ</b>  : {_field(record.get('address'))}\n"
             txt += f"{te(e['id_card'], '💳')} <b>Iᴅ</b>        : <code>{_field(record.get('id'))}</code>\n"
-            txt += f"{te(e['email'],   '📧')} <b>Eᴍᴀɪʟ</b>     : {_field(record.get('email'))}\n"
+            txt += f"{te(e['email'],   '📧')} <b>Eᴍᴀɪʟ</b>     : {_field(record.get('email'))}</blockquote>\n"
 
         elapsed = round(_time.time() - start_ts, 2)
         bot_username = "@YourBot"
