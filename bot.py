@@ -8317,22 +8317,33 @@ def _api_map():
     return out
 
 
+_API_ICON = {"on": "6019175208240289774", "off": "6019102674832595118", "unset": "6030591832608479858"}
+
+
+def _api_state(cmd, apis=None):
+    """on / off / unset — used for button colours."""
+    if not check_api_status(cmd)[0]:
+        return "off"
+    dbs = api_dbs(cmd)
+    if dbs:
+        return "on" if any(d["on"] for d in dbs) else "off"
+    ep = (apis or _api_map()).get(cmd, ("PASTE", False))[0]
+    return "unset" if str(ep).startswith("PASTE") else "on"
+
+
 def api_list_view(with_back=True):
     apis = _api_map()
     on = sum(1 for c in apis if check_api_status(c)[0])
     text = (f"<blockquote>💻 <b>API Manager</b></blockquote>\n"
             f"<blockquote>✅ Working: <b>{on}</b>   ⛔ Off: <b>{len(apis) - on}</b>\n\n"
-            f"👉 Tap a command to manage its databases (DB-1, DB-2…): add, remove, edit, on/off.\n"
-            f"✅ Blue button = working · ⚠️ Red button = off</blockquote>")
+            f"👉 Tap a command to manage its databases (DB-1, DB-2…): add, edit, delete, on/off.\n\n"
+            f"🟢 Green = ON  ·  🔵 Blue = API not set  ·  🔴 Red = OFF</blockquote>")
     mk = InlineKeyboardMarkup(row_width=3)
     btns = []
-    for c in apis:
-        if check_api_status(c)[0]:
-            btns.append(create_primary_button(f" /{c}", callback_data=f"admin_apiv_{c}",
-                                              icon_custom_emoji_id="6019175208240289774"))
-        else:
-            btns.append(create_danger_button(f" /{c}", callback_data=f"admin_apiv_{c}",
-                                             icon_custom_emoji_id="6019102674832595118"))
+    for c in sorted(apis):
+        state = _api_state(c, apis)
+        mkbtn = {"on": create_success_button, "off": create_danger_button}.get(state, create_primary_button)
+        btns.append(mkbtn(f" /{c}", callback_data=f"admin_apiv_{c}", icon_custom_emoji_id=_API_ICON[state]))
     mk.add(*btns)
     if with_back:
         mk.add(create_danger_button(" Back", callback_data="admin_cat_api", icon_custom_emoji_id="6138930810692049889"))
@@ -8360,22 +8371,25 @@ def api_detail_view(cmd):
             f"<blockquote>{rows}</blockquote>\n"
             f"<blockquote>🔁 <b>How it works:</b> a search tries DB-1 first. If it finds nothing (or is down), "
             f"it tries DB-2, then DB-3… Users see <i>Searching DB-2…</i>. Credit is charged once, only when data is found.\n\n"
-            f"✅/⛔ = turn a DB on/off · ✏️ = change its URL · 🗑 = remove it</blockquote>")
-    mk = InlineKeyboardMarkup(row_width=3)
+            f"🟢 Green = ON · 🔴 Red = OFF · 🔵 Blue = empty / edit</blockquote>")
+    mk = InlineKeyboardMarkup(row_width=2)
     for i, d in enumerate(dbs, 1):
-        mk.row(
-            (create_primary_button if d["on"] else create_danger_button)(
-                f" DB-{i}: {'ON' if d['on'] else 'OFF'}", callback_data=f"admin_apidb_t_{i}_{cmd}",
-                icon_custom_emoji_id="6019568309417023812"),
-            create_primary_button(f" Edit {i}", callback_data=f"admin_apidb_e_{i}_{cmd}",
-                                  icon_custom_emoji_id="6030591832608479858"),
-            create_danger_button(f" Del {i}", callback_data=f"admin_apidb_d_{i}_{cmd}",
-                                 icon_custom_emoji_id="6021413766669801212"))
-    mk.add(create_success_button(f" Add DB-{len(dbs) + 1}", callback_data=f"admin_apidb_a_0_{cmd}",
-                                 icon_custom_emoji_id="6136204644625423818"),
-           create_primary_button(" Command OFF" if working else " Command ON", callback_data=f"admin_apitog_{cmd}",
-                                 icon_custom_emoji_id="6019568309417023812"))
-    mk.add(create_danger_button(" Back", callback_data="admin_apilist", icon_custom_emoji_id="6138930810692049889"))
+        # DB-n status (tap = switch ON/OFF): green ON, red OFF
+        mk.row((create_success_button if d["on"] else create_danger_button)(
+            f" DB-{i} : {'ON' if d['on'] else 'OFF'}  (tap to turn {'OFF' if d['on'] else 'ON'})",
+            callback_data=f"admin_apidb_t_{i}_{cmd}",
+            icon_custom_emoji_id=_API_ICON["on" if d["on"] else "off"]))
+        mk.row(create_primary_button(f" Edit DB-{i}", callback_data=f"admin_apidb_e_{i}_{cmd}",
+                                     icon_custom_emoji_id="6030591832608479858"),
+               create_danger_button(f" Delete DB-{i}", callback_data=f"admin_apidb_d_{i}_{cmd}",
+                                    icon_custom_emoji_id="6021413766669801212"))
+    # next empty slot: blue
+    mk.row(create_primary_button(f" Add DB-{len(dbs) + 1}  (empty)", callback_data=f"admin_apidb_a_0_{cmd}",
+                                 icon_custom_emoji_id=_API_ICON["unset"]))
+    mk.row((create_success_button if working else create_danger_button)(
+        f" /{cmd} Command : {'ON' if working else 'OFF'}  (tap to turn {'OFF' if working else 'ON'})",
+        callback_data=f"admin_apitog_{cmd}", icon_custom_emoji_id=_API_ICON["on" if working else "off"]))
+    mk.row(create_danger_button(" Back", callback_data="admin_apilist", icon_custom_emoji_id="6138930810692049889"))
     return text, mk
 
 @bot.message_handler(commands=['apic'])
