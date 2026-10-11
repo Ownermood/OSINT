@@ -1297,22 +1297,25 @@ def buy_credit_markup():
 def send_limit_message(message):
     """Daily free limit over: short note in group, full buy-credit offer in PM."""
     user_id = message.from_user.id
+    D, F, S, B, R, P = (te("6048770006810893912", "💎"), te("5370596264205366968", "🔥"),
+                        te("5339247212012528642", "🌟"), te("6219727185708582935", "👑"),
+                        te("5233279094531045380", "🚀"), te("5992344826715050001", "📍"))
     pm_text = (
-        "<blockquote><b>💎 DAILY FREE SEARCH KHATAM</b>\n\n"
-        f"🔍 Roz free: PM mein <b>{FREE_SEARCH_PM}</b>, Group mein <b>{FREE_SEARCH_GROUP}</b>\n"
-        "⏰ Kal phir se free milega.\n\n"
-        "<b>🔥 Unlimited ke liye Credit Plan lo:</b>\n"
-        f"⚡ Weekly : <b>{PLAN_WEEKLY}</b>\n"
-        f"👑 Monthly : <b>{PLAN_MONTHLY}</b>\n\n"
-        "👇 Neeche button dabao aur admin se baat karo.\n"
-        "🎁 Ya /refer karke free credits kamao.</blockquote>"
+        f"<blockquote>{D} <b>DAILY FREE SEARCHES USED UP</b> {D}\n\n"
+        f"{S} You've used all your free searches for today.\n"
+        f"{P} Daily free limit: <b>{FREE_SEARCH_PM}</b> in PM, <b>{FREE_SEARCH_GROUP}</b> in groups\n"
+        f"{R} Your free searches reset tomorrow.\n\n"
+        f"{F} <b>Want unlimited searches? Pick a plan:</b>\n\n"
+        f"{R} Weekly : <b>{PLAN_WEEKLY}</b>\n"
+        f"{B} Monthly : <b>{PLAN_MONTHLY}</b>\n\n"
+        f"{S} Tap a plan below to contact the admin.</blockquote>"
     )
     if message.chat.type in ("group", "supergroup"):
         try:
             send_with_premium(
                 message.chat.id,
-                "<blockquote>⚠️ <b>Daily free search used!</b>\n"
-                "💎 Buy credits — details aapke PM mein bhej di hain.</blockquote>",
+                f"<blockquote>{F} <b>Daily free searches used up!</b>\n"
+                f"{D} Plan details have been sent to your PM.</blockquote>",
                 reply_to_message_id=message.message_id)
         except Exception:
             pass
@@ -1325,7 +1328,7 @@ def send_limit_message(message):
                 me = bot.get_me().username
                 mk = InlineKeyboardMarkup()
                 mk.add(create_success_button("💎 Buy Credits", url=f"https://t.me/{me}?start=buy"))
-                send_with_premium(message.chat.id, "👉 Bot ko PM mein start karo plans dekhne ke liye.", reply_markup=mk)
+                send_with_premium(message.chat.id, "👉 Start the bot in PM to see the plans.", reply_markup=mk)
             except Exception:
                 pass
 
