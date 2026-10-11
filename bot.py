@@ -1441,14 +1441,36 @@ def _norm_num(x):
     return d[-10:] if len(d) >= 10 else d
 
 
+def _active_q():
+    now = time.time()
+    return {"$or": [{"expire_ts": 0}, {"expire_ts": {"$gt": now}}, {"expire_ts": {"$exists": False}}]}
+
+
 def protected_numbers():
     if time.time() - _PROTECTED_CACHE["t"] > 30:
         try:
-            _PROTECTED_CACHE["set"] = {d["num"] for d in _col_protected.find({}, {"num": 1})}
+            _PROTECTED_CACHE["set"] = {d["num"] for d in _col_protected.find(_active_q(), {"num": 1})}
         except Exception:
             pass
         _PROTECTED_CACHE["t"] = time.time()
     return _PROTECTED_CACHE["set"]
+
+
+def user_protections(user_id):
+    try:
+        return list(_col_protected.find({"user_id": int(user_id), **_active_q()}))
+    except Exception:
+        return []
+
+
+def _fmt_left(exp):
+    if not exp:
+        return "Lifetime"
+    secs = exp - time.time()
+    if secs <= 0:
+        return "Expired"
+    d = int(secs // 86400); h = int((secs % 86400) // 3600)
+    return (f"{d}d {h}h" if d else f"{h}h") + " left"
 
 
 def _hits_protected(obj):
@@ -5774,6 +5796,9 @@ def start_cmd(message):
         create_primary_button(" Balance", callback_data="balance", icon_custom_emoji_id="6136159783692017451"),
         create_primary_button(" Redeem", callback_data="redeem", icon_custom_emoji_id="6136204644625423818"),
     )
+    if is_admin(user_id) or user_protections(user_id):
+        markup.add(create_success_button(" My Protection", callback_data="myprotect",
+                                         icon_custom_emoji_id="6019328362479097179"))
     markup.add(create_success_button(" Buy Credits / Protect Number", callback_data="buyplans",
                                      icon_custom_emoji_id="6048770006810893912"))
     markup.add(create_success_button(" Add Bot To Group", url=f"https://t.me/{bot_username}?startgroup=start",
@@ -7031,33 +7056,50 @@ def addadmin_cmd(message):
 
 
 def protect_view():
-    nums = sorted(protected_numbers() | set())
     try:
-        nums = sorted(d["num"] for d in _col_protected.find({}, {"num": 1}))
+        docs = list(_col_protected.find(_active_q()).sort("expire_ts", 1))
     except Exception:
-        pass
-    body = "\n".join(f"🔒 <code>{n}</code>" for n in nums) or "Abhi koi number protected nahi."
-    text = (f"🔒 <b>PROTECTED NUMBERS · {len(nums)}</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>{body}</blockquote>\n"
+        docs = []
+    rows = []
+    for d in docs:
+        rows.append(f"🔒 <code>{d['num']}</code> · 👤 <code>{d.get('user_id','?')}</code> · ⏳ {_fmt_left(d.get('expire_ts',0))}")
+    body = "\n".join(rows) or "Abhi koi number protected nahi."
+    text = (f"🔒 <b>PROTECTED NUMBERS · {len(docs)}</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>{body}</blockquote>\n"
             f"📌 <i>In numbers ka data bot kisi search mein nahi dikhayega (owner ke alawa).</i>\n"
-            f"📌 <i>/protect number · /unprotect number</i>")
-    mk = InlineKeyboardMarkup(row_width=2)
-    mk.add(create_success_button(" Add Number", callback_data="admin_protadd", icon_custom_emoji_id="6019328362479097179"))
-    for n in nums[:30]:
-        mk.add(create_danger_button(f" Unprotect {n}", callback_data=f"admin_protrm_{n}",
+            f"📌 <i>/protect user_id number days  ·  days 0 = lifetime  ·  /unprotect number</i>")
+    mk = InlineKeyboardMarkup(row_width=1)
+    mk.add(create_success_button(" Add Protection", callback_data="admin_protadd", icon_custom_emoji_id="6019328362479097179"))
+    for d in docs[:30]:
+        mk.add(create_danger_button(f" Remove {d['num']}", callback_data=f"admin_protrm_{d['num']}",
                                     icon_custom_emoji_id="6021413766669801212"))
     mk.add(create_danger_button(" Back", callback_data="admin_cat_users", icon_custom_emoji_id=ADMIN_BACK_ICON))
     return text, mk
 
 
-def _protect_add(raw):
-    added = []
-    for part in re.split(r"[,\s]+", raw):
-        n = _norm_num(part)
-        if len(n) >= 6:
-            _col_protected.update_one({"num": n}, {"$set": {"num": n}}, upsert=True)
-            added.append(n)
+def protect_add(user_id, num, days):
+    """Add/renew a protection. days=0 → lifetime. Returns normalized num."""
+    n = _norm_num(num)
+    if len(n) < 6:
+        return None
+    now = time.time()
+    exp = 0 if int(days) == 0 else now + int(days) * 86400
+    _col_protected.update_one({"num": n},
+        {"$set": {"num": n, "user_id": int(user_id), "days": int(days),
+                  "start_ts": now, "expire_ts": exp, "warned": False}}, upsert=True)
     _PROTECTED_CACHE["t"] = 0
-    return added
+    return n
+
+
+def _parse_protect(raw):
+    """Accepts 'user_id number days' in any order-ish: finds a <10-digit id, a 10-digit num, and days."""
+    parts = raw.split()
+    if len(parts) < 3:
+        return None
+    try:
+        uid, num, days = int(parts[0]), parts[1], int(parts[2])
+    except ValueError:
+        return None
+    return uid, num, days
 
 
 @bot.message_handler(commands=['protect'])
@@ -7069,8 +7111,25 @@ def protect_cmd(message):
         t, mk = protect_view()
         send_with_premium(message.chat.id, t, reply_markup=mk)
         return
-    added = _protect_add(parts[1])
-    send_with_premium(message.chat.id, ("✅ Protected: " + ", ".join(added)) if added else "❌ Valid number bhejo.")
+    pr = _parse_protect(parts[1])
+    if not pr:
+        send_with_premium(message.chat.id, "❌ Use: <code>/protect user_id number days</code>\nExample: <code>123456789 9876543210 30</code>  (days 0 = lifetime)")
+        return
+    n = protect_add(*pr)
+    if not n:
+        send_with_premium(message.chat.id, "❌ Valid number bhejo.")
+        return
+    _notify_protect_added(pr[0], n, pr[2])
+    t, mk = protect_view()
+    send_with_premium(message.chat.id, f"✅ Protected <code>{n}</code> for user <code>{pr[0]}</code>.\n\n" + t, reply_markup=mk)
+
+
+def _notify_protect_added(uid, num, days):
+    span = "lifetime" if int(days) == 0 else f"{days} days"
+    try:
+        send_with_premium(uid, f"🔒 <b>Number Protection Active</b>\n\nYour number <code>{num}</code> is now protected for <b>{span}</b>.\nIt won't appear in any search on this bot.\n\nSee /start → My Protection.")
+    except Exception:
+        pass
 
 
 @bot.message_handler(commands=['unprotect'])
@@ -8705,6 +8764,23 @@ def callback_handler(call):
             return
         # ── end leak pagination ─────────────────────────────────
 
+        if call.data == "myprotect":
+            bot.answer_callback_query(call.id)
+            docs = user_protections(call.from_user.id)
+            if docs:
+                rows = "\n".join(f"🔒 <code>{d['num']}</code> · ⏳ {_fmt_left(d.get('expire_ts',0))}" for d in docs)
+            else:
+                rows = "Aapka koi number protected nahi hai."
+            txt = (f"🔒 <b>MY PROTECTION</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>{rows}</blockquote>\n"
+                   f"📌 <i>Protected number ka data kisi search mein nahi dikhta.</i>")
+            back = InlineKeyboardMarkup()
+            back.add(create_default_button(" Back", callback_data="back_start", icon_custom_emoji_id="6138930810692049889"))
+            try:
+                edit_with_premium(call.message.chat.id, call.message.message_id, txt, reply_markup=back)
+            except Exception:
+                send_with_premium(call.message.chat.id, txt, reply_markup=back)
+            return
+
         if call.data == "buyplans":
             bot.answer_callback_query(call.id)
             try:
@@ -8916,24 +8992,36 @@ def callback_handler(call):
         if call.data in ("admin_protect", "admin_protadd") or call.data.startswith("admin_protrm_"):
             cid, mid = call.message.chat.id, call.message.message_id
             if call.data.startswith("admin_protrm_"):
-                _col_protected.delete_one({"num": call.data[len("admin_protrm_"):]})
+                _pn = call.data[len("admin_protrm_"):]
+                _pd = _col_protected.find_one({"num": _pn})
+                _col_protected.delete_one({"num": _pn})
                 _PROTECTED_CACHE["t"] = 0
-                bot.answer_callback_query(call.id, "✅ Unprotected")
+                if _pd and _pd.get("user_id"):
+                    try:
+                        send_with_premium(_pd["user_id"], f"🔓 Your number <code>{_pn}</code> protection has been removed.")
+                    except Exception:
+                        pass
+                bot.answer_callback_query(call.id, "✅ Removed")
             elif call.data == "admin_protadd":
                 bot.answer_callback_query(call.id)
                 back = InlineKeyboardMarkup()
                 back.add(create_primary_button(" Cancel", callback_data="admin_protect", icon_custom_emoji_id=ADMIN_BACK_ICON))
-                edit_with_premium(cid, mid, "🔒 <b>ADD PROTECTED NUMBER</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Number bhejo "
-                                  "(ek se zyada ho to comma se):\n\n<code>9876543210, 9123456789</code></blockquote>",
+                edit_with_premium(cid, mid, "🔒 <b>ADD PROTECTION</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Bhejo:  "
+                                  "<b>user_id  number  days</b>\n\n<code>123456789 9876543210 30</code>\n\n"
+                                  "👤 user_id = jis user ka number hai\n📱 number = protect karna hai\n⏳ days = kitne din (0 = lifetime)</blockquote>",
                                   reply_markup=back)
 
                 def _on_prot(rm):
                     if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
                         return
-                    added = _protect_add(rm.text)
+                    pr = _parse_protect(rm.text)
+                    n = protect_add(*pr) if pr else None
+                    if n:
+                        _notify_protect_added(pr[0], n, pr[2])
                     t2, mk2 = protect_view()
-                    edit_with_premium(cid, mid, (f"✅ Protected: {', '.join(added)}\n\n" if added else "❌ Valid number nahi mila\n\n") + t2,
-                                      reply_markup=mk2)
+                    head = (f"✅ Protected <code>{n}</code> for <code>{pr[0]}</code>\n\n" if n
+                            else "❌ Format: <code>user_id number days</code>\n\n")
+                    edit_with_premium(cid, mid, head + t2, reply_markup=mk2)
 
                 bot.register_next_step_handler_by_chat_id(cid, _on_prot)
                 return
@@ -9654,6 +9742,26 @@ if __name__ == "__main__":
         pass
 
     clear_pending_updates()
+
+    def _protection_expiry_loop():
+        while True:
+            try:
+                now = time.time()
+                for d in list(_col_protected.find({"expire_ts": {"$gt": 0, "$lte": now}})):
+                    _col_protected.delete_one({"_id": d["_id"]})
+                    _PROTECTED_CACHE["t"] = 0
+                    if d.get("user_id"):
+                        try:
+                            send_with_premium(d["user_id"],
+                                "⏳ <b>Protection Expired</b>\n\nYour number <code>" + str(d["num"]) +
+                                "</code> is no longer protected.\nRenew it via /start → Buy Credits / Protect Number.")
+                        except Exception:
+                            pass
+            except Exception as _e:
+                print(f"[protection_expiry] {_e}")
+            time.sleep(300)
+
+    threading.Thread(target=_protection_expiry_loop, daemon=True).start()
 
     try:
         bot.polling(non_stop=True, skip_pending=True, timeout=15)
