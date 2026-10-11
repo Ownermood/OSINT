@@ -9853,7 +9853,7 @@ def _add_copy_box(t):
     before = "\n".join(out_lines[:at])
     inside_quote = before.count("<blockquote") > before.count("</blockquote>")
     # a code block inside a quote loses Telegram's Copy button → close the quote around it
-    block = f"</blockquote>\n<pre>{box}</pre>\n<blockquote>" if inside_quote else f"<pre>{box}</pre>"
+    block = f"</blockquote>\n<pre><code class='language-Copy'>{box}</code></pre>\n<blockquote>" if inside_quote else f"<pre><code class='language-Copy'>{box}</code></pre>"
     out_lines.insert(at, block)
     out = "\n".join(out_lines)
     out = re.sub(r"<blockquote[^>]*>\s*(<pre>.*?</pre>)\s*</blockquote>", r"\1", out, flags=re.S)
