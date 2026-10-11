@@ -1793,7 +1793,7 @@ def _after_redeem(code, user_id, credits):
             un = None
         who = f'<a href="tg://user?id={user_id}">{_html_mod.escape(nm)}</a>' + (f" (@{un})" if un else "")
         _col_codes.update_one({"code": code}, {"$push": {"claimers": who}})
-        chat = get_setting("redeem_log_chat")
+        chat = ADMIN_ID   # claim log comes to the owner's DM (forward it to the channel yourself)
         if chat:
             full = bool(mx) and used >= mx
             if full:
@@ -1832,14 +1832,11 @@ def _after_redeem(code, user_id, credits):
                         print(f"redeem log failed: {e}")
                 if m:
                     _col_codes.update_one({"code": code}, {"$set": {"log_mid": m.message_id}})
-                else:   # tell the owner why the channel post failed
-                    try:
-                        bot.send_message(ADMIN_ID, f"⚠️ Claim log could not be posted to {chat}:\n{str(err)[:300]}", parse_mode=None)
-                    except Exception:
-                        pass
+                else:
+                    print(f"claim log not sent: {err}")
         if mx and used >= mx:
-            for aid in {ADMIN_ID, doc.get("created_by")}:
-                if not aid:
+            for aid in {doc.get("created_by")}:
+                if not aid or aid == ADMIN_ID:
                     continue
                 try:
                     send_with_premium(aid,
@@ -7392,10 +7389,6 @@ def codes_view():
                create_danger_button(f" Delete {d['code']}", callback_data=f"admin_codedel_{d['code']}",
                                     icon_custom_emoji_id="6019102674832595118"))
     mk.add(create_primary_button(" New Code", callback_data="admin_codenew", icon_custom_emoji_id="6136204644625423818"))
-    lc = get_setting("redeem_log_chat")
-    mk.add((create_success_button if lc else create_primary_button)(
-        f" Claim Log: {lc}" if lc else " Set Claim Log Channel", callback_data="admin_codelog",
-        icon_custom_emoji_id="6138680877955160519"))
     mk.add(create_danger_button(" Back", callback_data="admin_cat_credits", icon_custom_emoji_id=ADMIN_BACK_ICON))
     return text, mk
 
@@ -9287,45 +9280,6 @@ def callback_handler(call):
             bot.answer_callback_query(call.id, "This screen expired. Tap New Code again.", True)
             return
 
-        if call.data == "admin_codelog":
-            bot.answer_callback_query(call.id)
-            cid, mid = call.message.chat.id, call.message.message_id
-            back = InlineKeyboardMarkup()
-            back.add(create_danger_button(" Back", callback_data="admin_codes", icon_custom_emoji_id=ADMIN_BACK_ICON))
-            edit_with_premium(cid, mid,
-                "<blockquote>📢 <b>CLAIM LOG CHANNEL</b>\n\nEvery redeemed code is posted here (code hidden like "
-                "<code>DIW•••••</code>).\n\nSend the channel ID or @username, e.g. <code>-1001234567890</code>\n"
-                "Send <code>off</code> to stop the log.\n\n⚠️ Add the bot to the channel as admin first.</blockquote>",
-                reply_markup=back)
-
-            def _on_log(rm):
-                if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
-                    return
-                v = rm.text.strip()
-                if v.lower() != "off" and not re.fullmatch(r"-100\d{6,}|@[A-Za-z][A-Za-z0-9_]{3,}", v):
-                    edit_with_premium(cid, mid,
-                        f"<blockquote>❌ <code>{_html_mod.escape(v[:40])}</code> is not a channel ID.\n\n"
-                        "📢 Send the channel ID (starts with <code>-100</code>) or <code>@username</code>, "
-                        "or <code>off</code>.\n\n💡 To create a code, tap Back → New Code.</blockquote>",
-                        reply_markup=back)
-                    bot.register_next_step_handler_by_chat_id(cid, _on_log)
-                    return
-                if v.lower() == "off":
-                    set_setting("redeem_log_chat", None)
-                    note = "✅ Claim log turned off.\n\n"
-                else:
-                    try:
-                        bot.send_message(v, "✅ Redeem claim log connected.")
-                        set_setting("redeem_log_chat", v)
-                        note = f"✅ Claim log set to <code>{_html_mod.escape(v)}</code>\n\n"
-                    except Exception as e:
-                        note = f"❌ Could not post there — add the bot as admin and try again.\n<code>{_html_mod.escape(str(e)[:120])}</code>\n\n"
-                t2, mk2 = codes_view()
-                edit_with_premium(cid, mid, note + t2, reply_markup=mk2)
-
-            bot.register_next_step_handler_by_chat_id(cid, _on_log)
-            return
-
         if call.data == "admin_codenew":
             cid, mid = call.message.chat.id, call.message.message_id
             bot.answer_callback_query(call.id)
@@ -9339,7 +9293,13 @@ def callback_handler(call):
                 bot.register_next_step_handler_by_chat_id(cid, handler)
 
             def _bad(rm):
-                return not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/")
+                bad = not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/")
+                if not bad:
+                    try:   # keep the PM clean: the typed value is shown on the screen anyway
+                        bot.delete_message(rm.chat.id, rm.message_id)
+                    except Exception:
+                        pass
+                return bad
 
             def s1(rm):
                 if _bad(rm):
