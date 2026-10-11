@@ -4270,7 +4270,7 @@ def format_insta_result_v3(result, query, credits_left):
 # ── TGID formatter emoji dict ────────────────────────────────────
 TG_EMOJIS = {
     "header_divider": "5467641505525016018",
-    "tg_title":       "6323058096532024838",   # ✈️ telegram-style
+    "tg_title":       "6019107055699236857",   # 💬 telegram-style (owner SF pack)
     "query":          "5379999674193172777",   # 🔭
     "tgid":           "5985796637971191405",   # 💳 (id card)
     "username":       "5425124408786197150",   # 👤
