@@ -1356,6 +1356,18 @@ def _try_use_free(user_id, in_group):
     return r.modified_count == 1
 
 
+def credits_display(user_id):
+    """What to show as credits: admins/owner have unlimited."""
+    return "♾ Unlimited" if is_admin(user_id) else get_credits(user_id)
+
+
+def free_display(user_id):
+    if is_admin(user_id):
+        return "♾ Unlimited (Admin)"
+    return (f"{free_left(user_id, False)}/{FREE_SEARCH_PM} (PM) · "
+            f"{free_left(user_id, True)}/{FREE_SEARCH_GROUP} (Group)")
+
+
 def free_left(user_id, in_group):
     field, limit = _free_field(in_group)
     try:
@@ -4719,7 +4731,7 @@ def tgid_cmd(message):
         if not charge_search(message):
             send_limit_message(message)
             return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     working, status_msg = check_api_status('tgid')
     if not working:
@@ -4785,7 +4797,7 @@ def num_cmd(message):
         if not charge_search(message):
             send_limit_message(message)
             return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     working, status_msg = check_api_status('num')
     if not working:
@@ -4860,7 +4872,7 @@ def adhr_cmd(message):
         if not charge_search(message):
             send_limit_message(message)
             return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     working, status_msg = check_api_status('adhr')
     if not working:
@@ -4943,7 +4955,7 @@ def tguser_cmd(message):
         if not charge_search(message):
             send_limit_message(message)
             return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     bot.send_chat_action(chat_id, 'typing')
     wait = send_searching_animation(chat_id)
@@ -5316,7 +5328,7 @@ def leak_cmd(message):
         if not charge_search(message):
             send_limit_message(message)
             return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     working, status_msg = check_api_status('leak')
     if not working:
@@ -5644,8 +5656,8 @@ def start_cmd(message):
         f"\n"
         f"{_s(SMILEY,'😀')} <b>Hᴇʏ !! {first_name}</b>\n"
         f"{_s(IDICO,'🆔')} <b>ID</b>: <code>{user_id}</code>\n"
-        f"{_s(BADGE,'⚜️')} <b>Cʀᴇᴅɪᴛꜱ</b>: <b>{credits}</b>\n"
-        f"{_s(STAR1,'🌟')} <b>Fʀᴇᴇ Tᴏᴅᴀʏ</b>: <b>{free_left(user_id, False)}/{FREE_SEARCH_PM}</b> (PM) · <b>{free_left(user_id, True)}/{FREE_SEARCH_GROUP}</b> (Group)\n\n"
+        f"{_s(BADGE,'⚜️')} <b>Cʀᴇᴅɪᴛꜱ</b>: <b>{credits_display(user_id)}</b>\n"
+        f"{_s(STAR1,'🌟')} <b>Fʀᴇᴇ Tᴏᴅᴀʏ</b>: <b>{free_display(user_id)}</b>\n\n"
         f"{DIV}"
         f"{_s(DIAM,'💎')} <b>OSINT COMMANDS:</b>\n\n"
         f"{_s(PHONE,'☎️')} /num <code>9876543210</code> - Indian Phone\n"
@@ -5773,7 +5785,7 @@ def help_cmd(message):
         f"\n"
         f"{_h(H_SMILEY,'😀')} <b>Hᴇʏ !!</b>\n"
         f"{_h(H_IDICO,'🆔')} <b>ID</b>: <code>{user_id}</code>\n"
-        f"{_h(H_BADGE,'⚜️')} <b>Cʀᴇᴅɪᴛꜱ</b>: <b>{credits}</b>\n\n"
+        f"{_h(H_BADGE,'⚜️')} <b>Cʀᴇᴅɪᴛꜱ</b>: <b>{credits_display(user_id)}</b>\n\n"
         f"{HDV}"
         f"{_h(H_DIAM,'💎')} <b>OSINT COMMANDS:</b>\n\n"
         f"{_h(H_PHONE,'☎️')} /num <code>9876543210</code> - Indian Phone\n"
@@ -5839,8 +5851,8 @@ def profile_cmd(message):
 🆔 ID: <code>{user_data.get('user_id', user_id)}</code>
 👤 Username: @{user_data.get('username') or 'N/A'}
 📝 Name: {user_data.get('first_name') or 'User'}
-💰 Credits: {user_data.get('credits') or 0}
-🎁 Free Today: {free_left(user_id, False)}/{FREE_SEARCH_PM} (PM) · {free_left(user_id, True)}/{FREE_SEARCH_GROUP} (Group)
+💰 Credits: {credits_display(user_id)}
+🎁 Free Today: {free_display(user_id)}
 👥 Referrals: {user_data.get('referral_count') or 0}
 ⚡ Commands Used: {user_data.get('total_commands') or 0}
 👑 Admin: {'✅' if user_data.get('is_admin') == 1 or user_id == ADMIN_ID else '❌'}
@@ -5871,8 +5883,8 @@ def balance_cmd(message):
     msg = f"""
 💰 CREDIT BALANCE
 
-💳 Credits: {credits}
-🎁 Free Today: {free_left(user_id, False)}/{FREE_SEARCH_PM} (PM) · {free_left(user_id, True)}/{FREE_SEARCH_GROUP} (Group)
+💳 Credits: {credits_display(user_id)}
+🎁 Free Today: {free_display(user_id)}
 ⏰ Free searches reset daily
 """
     try:
@@ -6023,7 +6035,7 @@ def handle_api_command(message, command_name, api_func, validate_func, title, qu
         if not charge_search(message):
             send_limit_message(message)
             return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     try:
         bot.send_chat_action(chat_id, 'typing')
@@ -6096,7 +6108,7 @@ def vech_cmd(message):
         if not charge_search(message):
             send_limit_message(message)
             return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     try:
         bot.send_chat_action(chat_id, 'typing')
@@ -6174,7 +6186,7 @@ def vechrc_cmd(message):
         if not charge_search(message):
             send_limit_message(message)
             return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     try:
         bot.send_chat_action(chat_id, 'typing')
@@ -6253,7 +6265,7 @@ def upi_cmd(message):
     if True:
         if not charge_search(message):
             send_limit_message(message); return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
     try: bot.send_chat_action(chat_id, 'typing')
     except Exception: pass
     wait = send_searching_animation(chat_id)
@@ -6312,7 +6324,7 @@ def family_cmd(message):
         if not charge_search(message):
             send_limit_message(message)
             return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     working, status_msg = check_api_status('family')
     if not working:
@@ -6391,7 +6403,7 @@ def snap_cmd(message):
         if not charge_search(message):
             send_limit_message(message)
             return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     try: bot.send_chat_action(chat_id, 'typing')
     except Exception: pass
@@ -6490,7 +6502,7 @@ def ai_cmd(message):
             send_limit_message(message)
             return
 
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     bot.send_chat_action(chat_id, 'upload_photo')
     wait = send_searching_animation(chat_id)
@@ -6580,7 +6592,7 @@ def num2_cmd(message):
         if not charge_search(message):
             send_limit_message(message)
             return
-    credits_left = get_credits(user_id)
+    credits_left = credits_display(user_id)
 
     bot.send_chat_action(chat_id, 'typing')
     wait = send_searching_animation(chat_id)
@@ -6623,7 +6635,7 @@ def insta_cmd(message):
         if not charge_search(message):
             send_limit_message(message)
             return
-        credits_left = get_credits(user_id)
+        credits_left = credits_display(user_id)
     else:
         credits_left = "∞ (Group)"
 
