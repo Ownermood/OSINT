@@ -530,6 +530,9 @@ def _sanitise_html(text: str) -> str:
     return ''.join(result)
 
 
+_EDIT_TL = threading.local()
+
+
 def send_with_premium(
     chat_id,
     text,
@@ -546,6 +549,21 @@ def send_with_premium(
     if "<tg-emoji" not in text:
         premium_emoji_id = get_random_premium_emoji_id()
         text = text + ' <tg-emoji emoji-id="' + premium_emoji_id + '">⭐</tg-emoji>'
+    # menu buttons: show the reply in the same message instead of a new one
+    tgt = getattr(_EDIT_TL, "target", None)
+    if tgt and tgt[0] == chat_id:
+        _EDIT_TL.target = None
+        if reply_markup is not None and tgt[2] is not None:
+            try:
+                reply_markup.keyboard += tgt[2].keyboard
+            except Exception:
+                pass
+        try:
+            return bot.edit_message_text(text, chat_id, tgt[1], parse_mode=parse_mode,
+                                         reply_markup=reply_markup or tgt[2])
+        except Exception as e:
+            if "not modified" in str(e).lower():
+                return None
     return bot.send_message(
         chat_id=chat_id,
         text=text,
@@ -1174,29 +1192,142 @@ def deduct_credit(user_id):
         return True
 
 
-FREE_SEARCH_PM = 3
-FREE_SEARCH_GROUP = 5
+FREE_SEARCH_PM = 3       # free searches per day in PM
+FREE_SEARCH_GROUP = 5    # free searches per day in groups
+PLAN_WEEKLY = "₹99 / week"
+PLAN_MONTHLY = "₹199 / month"
+
+_CHARGE_TL = threading.local()
+
+
+def _today():
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def _free_field(in_group):
+    return ("fq_gc", FREE_SEARCH_GROUP) if in_group else ("fq_pm", FREE_SEARCH_PM)
+
+
+def _try_use_free(user_id, in_group):
+    """Atomically use one daily free search. Returns True if used."""
+    field, limit = _free_field(in_group)
+    today = _today()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    r = _col_users.update_one(
+        {"user_id": user_id, f"{field}.d": today, f"{field}.n": {"$lt": limit}},
+        {"$inc": {f"{field}.n": 1, "total_commands": 1}, "$set": {"last_active": now}})
+    if r.modified_count:
+        return True
+    r = _col_users.update_one(
+        {"user_id": user_id, f"{field}.d": {"$ne": today}},
+        {"$set": {field: {"d": today, "n": 1}, "last_active": now}, "$inc": {"total_commands": 1}})
+    return r.modified_count == 1
+
+
+def free_left(user_id, in_group):
+    field, limit = _free_field(in_group)
+    try:
+        doc = _col_users.find_one({"user_id": user_id}, {field: 1}) or {}
+        q = doc.get(field) or {}
+        used = q.get("n", 0) if q.get("d") == _today() else 0
+        return max(0, limit - used)
+    except Exception:
+        return 0
 
 
 def charge_search(message):
-    """Free searches first (PM: 3, Group: 5 per user), then 1 credit per search."""
+    """
+    Check only — nothing is deducted here. The search is charged
+    (daily free first, then 1 credit) only when the API returns a result.
+    """
+    _CHARGE_TL.pending = None
     user_id = message.from_user.id
     if is_admin(user_id):
         return True
     in_group = message.chat.type in ("group", "supergroup")
-    field, limit = ("free_gc_used", FREE_SEARCH_GROUP) if in_group else ("free_pm_used", FREE_SEARCH_PM)
     try:
         if not _col_users.find_one({"user_id": user_id}, {"_id": 1}):
             create_user(user_id, message.from_user.username, message.from_user.first_name)
-        res = _col_users.update_one(
-            {"user_id": user_id, "$or": [{field: {"$lt": limit}}, {field: {"$exists": False}}]},
-            {"$inc": {field: 1, "total_commands": 1},
-             "$set": {"last_active": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}})
-        if res.modified_count == 1:
-            return True
+    except Exception:
+        pass
+    if free_left(user_id, in_group) <= 0 and get_credits(user_id) <= 0:
+        return False
+    _CHARGE_TL.pending = (user_id, in_group)
+    if (getattr(message, "text", "") or "").startswith("/ai"):
+        commit_search_charge()   # no result API for /ai — charge now
+    return True
+
+
+def commit_search_charge():
+    pend = getattr(_CHARGE_TL, "pending", None)
+    _CHARGE_TL.pending = None
+    if not pend:
+        return
+    user_id, in_group = pend
+    try:
+        if not _try_use_free(user_id, in_group):
+            deduct_credit(user_id)
     except Exception as e:
-        print(f"charge_search error: {e}")
-    return deduct_credit(user_id)
+        print(f"commit_search_charge error: {e}")
+
+
+def _charge_on_success(fn):
+    def wrapper(*a, **kw):
+        res = fn(*a, **kw)
+        ok = bool(res) and not (isinstance(res, dict) and
+                                str(res.get("status", "")).lower() in ("error", "failed", "fail"))
+        if ok:
+            commit_search_charge()
+        return res
+    wrapper.__name__ = fn.__name__
+    return wrapper
+
+
+def buy_credit_markup():
+    mk = InlineKeyboardMarkup(row_width=1)
+    mk.add(create_success_button(f" Weekly — {PLAN_WEEKLY}", url=f"tg://user?id={ADMIN_ID}",
+                                 icon_custom_emoji_id="6048770006810893912"))
+    mk.add(create_success_button(f" Monthly — {PLAN_MONTHLY}", url=f"tg://user?id={ADMIN_ID}",
+                                 icon_custom_emoji_id="6219727185708582935"))
+    mk.add(create_primary_button(" Refer & Earn", callback_data="refer",
+                                 icon_custom_emoji_id="5424746868275944727"))
+    return mk
+
+
+def send_limit_message(message):
+    """Daily free limit over: short note in group, full buy-credit offer in PM."""
+    user_id = message.from_user.id
+    pm_text = (
+        "<blockquote><b>💎 DAILY FREE SEARCH KHATAM</b>\n\n"
+        f"🔍 Roz free: PM mein <b>{FREE_SEARCH_PM}</b>, Group mein <b>{FREE_SEARCH_GROUP}</b>\n"
+        "⏰ Kal phir se free milega.\n\n"
+        "<b>🔥 Unlimited ke liye Credit Plan lo:</b>\n"
+        f"⚡ Weekly : <b>{PLAN_WEEKLY}</b>\n"
+        f"👑 Monthly : <b>{PLAN_MONTHLY}</b>\n\n"
+        "👇 Neeche button dabao aur admin se baat karo.\n"
+        "🎁 Ya /refer karke free credits kamao.</blockquote>"
+    )
+    if message.chat.type in ("group", "supergroup"):
+        try:
+            send_with_premium(
+                message.chat.id,
+                "<blockquote>⚠️ <b>Daily free search used!</b>\n"
+                "💎 Buy credits — details aapke PM mein bhej di hain.</blockquote>",
+                reply_to_message_id=message.message_id)
+        except Exception:
+            pass
+    try:
+        send_with_premium(user_id, pm_text, reply_markup=buy_credit_markup())
+    except Exception:
+        # user never started the bot in PM
+        if message.chat.type in ("group", "supergroup"):
+            try:
+                me = bot.get_me().username
+                mk = InlineKeyboardMarkup()
+                mk.add(create_success_button("💎 Buy Credits", url=f"https://t.me/{me}?start=buy"))
+                send_with_premium(message.chat.id, "👉 Bot ko PM mein start karo plans dekhne ke liye.", reply_markup=mk)
+            except Exception:
+                pass
 
 def add_credits(user_id, amount):
     try:
@@ -4344,7 +4475,7 @@ def tgid_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
+            send_limit_message(message)
             return
     credits_left = get_credits(user_id)
 
@@ -4410,7 +4541,7 @@ def num_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
+            send_limit_message(message)
             return
     credits_left = get_credits(user_id)
 
@@ -4485,7 +4616,7 @@ def adhr_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(message.chat.id, "❌ Insufficient credits!")
+            send_limit_message(message)
             return
     credits_left = get_credits(user_id)
 
@@ -4568,7 +4699,7 @@ def tguser_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(message.chat.id, "❌ Insufficient credits!")
+            send_limit_message(message)
             return
     credits_left = get_credits(user_id)
 
@@ -4578,6 +4709,7 @@ def tguser_cmd(message):
     try:
         chat = bot.get_chat(f"@{username}")
         wait._stop_event.set()
+        commit_search_charge()
         target_user_id = chat.id
 
         msg = f"""
@@ -4940,7 +5072,7 @@ def leak_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
+            send_limit_message(message)
             return
     credits_left = get_credits(user_id)
 
@@ -5635,7 +5767,7 @@ def handle_api_command(message, command_name, api_func, validate_func, title, qu
 
     if True:
         if not charge_search(message):
-            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
+            send_limit_message(message)
             return
     credits_left = get_credits(user_id)
 
@@ -5708,7 +5840,7 @@ def vech_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
+            send_limit_message(message)
             return
     credits_left = get_credits(user_id)
 
@@ -5786,7 +5918,7 @@ def vechrc_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
+            send_limit_message(message)
             return
     credits_left = get_credits(user_id)
 
@@ -5866,7 +5998,7 @@ def upi_cmd(message):
     chat_id = message.chat.id
     if True:
         if not charge_search(message):
-            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo."); return
+            send_limit_message(message); return
     credits_left = get_credits(user_id)
     try: bot.send_chat_action(chat_id, 'typing')
     except Exception: pass
@@ -5924,7 +6056,7 @@ def family_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(message.chat.id, "❌ Insufficient credits!")
+            send_limit_message(message)
             return
     credits_left = get_credits(user_id)
 
@@ -6003,7 +6135,7 @@ def snap_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(chat_id, "❌ Free searches khatam! Credits ke liye /refer ya /redeem use karo.")
+            send_limit_message(message)
             return
     credits_left = get_credits(user_id)
 
@@ -6101,7 +6233,7 @@ def ai_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(message.chat.id, "❌ Insufficient credits! Get more via referral or redeem codes.")
+            send_limit_message(message)
             return
 
     credits_left = get_credits(user_id)
@@ -6192,7 +6324,7 @@ def num2_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(message.chat.id, "❌ Insufficient credits!")
+            send_limit_message(message)
             return
     credits_left = get_credits(user_id)
 
@@ -6235,7 +6367,7 @@ def insta_cmd(message):
 
     if True:
         if not charge_search(message):
-            send_with_premium(message.chat.id, "❌ Insufficient credits!")
+            send_limit_message(message)
             return
         credits_left = get_credits(user_id)
     else:
@@ -7807,37 +7939,23 @@ def callback_handler(call):
             return
         # ── end leak pagination ─────────────────────────────────
 
-        if call.data == "help":
-            class FakeMsg:
-                def __init__(self, cid, uid):
-                    self.chat = type('obj', (), {'id': cid})
-                    self.from_user = type('obj', (), {'id': uid})
-                    self.text = "/help"
-                    self.date = int(datetime.now().timestamp())
-            help_cmd(FakeMsg(call.message.chat.id, call.from_user.id))
+        if call.data in ("help", "profile", "balance", "refer", "back_start"):
+            import copy as _copy
+            fm = _copy.copy(call.message)
+            fm.from_user = call.from_user
+            fm.date = int(datetime.now().timestamp())
+            fm.text = "/start" if call.data == "back_start" else "/" + call.data
+            back = InlineKeyboardMarkup()
+            back.add(create_default_button(" Back", callback_data="back_start",
+                                           icon_custom_emoji_id="5307517685846785869"))
             bot.answer_callback_query(call.id)
-            return
-
-        if call.data == "profile":
-            class FakeMsg:
-                def __init__(self, cid, uid):
-                    self.chat = type('obj', (), {'id': cid})
-                    self.from_user = type('obj', (), {'id': uid})
-                    self.text = "/profile"
-                    self.date = int(datetime.now().timestamp())
-            profile_cmd(FakeMsg(call.message.chat.id, call.from_user.id))
-            bot.answer_callback_query(call.id)
-            return
-
-        if call.data == "balance":
-            class FakeMsg:
-                def __init__(self, cid, uid):
-                    self.chat = type('obj', (), {'id': cid})
-                    self.from_user = type('obj', (), {'id': uid})
-                    self.text = "/balance"
-                    self.date = int(datetime.now().timestamp())
-            balance_cmd(FakeMsg(call.message.chat.id, call.from_user.id))
-            bot.answer_callback_query(call.id)
+            _EDIT_TL.target = (call.message.chat.id, call.message.message_id,
+                               None if call.data == "back_start" else back)
+            try:
+                {"help": help_cmd, "profile": profile_cmd, "balance": balance_cmd,
+                 "refer": refer_cmd, "back_start": start_cmd}[call.data](fm)
+            finally:
+                _EDIT_TL.target = None
             return
 
         # ── menu / admin buttons → reuse existing command handlers ──
@@ -7851,7 +7969,23 @@ def callback_handler(call):
 
         if call.data == "redeem":
             bot.answer_callback_query(call.id)
-            redeem_cmd(_cb_msg("/redeem"))
+            back = InlineKeyboardMarkup()
+            back.add(create_default_button(" Back", callback_data="back_start",
+                                           icon_custom_emoji_id="5307517685846785869"))
+            try:
+                edit_with_premium(call.message.chat.id, call.message.message_id,
+                                  "<blockquote><b>🎟 REDEEM CODE</b>\n\nApna redeem code bhejo 👇\n"
+                                  "Example: <code>ABC123XY</code></blockquote>", reply_markup=back)
+            except Exception:
+                pass
+
+            def _on_code(rm):
+                if not rm.text or rm.text.startswith("/"):
+                    return
+                rm.text = "/redeem " + rm.text.strip()
+                redeem_cmd(rm)
+
+            bot.register_next_step_handler_by_chat_id(call.message.chat.id, _on_code)
             return
 
         if call.data == "admin_panel" or call.data.startswith(("admin_", "delvid_", "delphoto_")):
@@ -8316,6 +8450,11 @@ def contact_export_cmd(message):
         except Exception:
             pass
 
+
+
+# charge a search only when its API returned a result
+for _fname in [n for n in list(globals()) if n.startswith("call_") and n.endswith("_api")]:
+    globals()[_fname] = _charge_on_success(globals()[_fname])
 
 if __name__ == "__main__":
     print("=" * 60)
