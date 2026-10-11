@@ -7664,11 +7664,52 @@ def list_apis_cmd(message):
     if not is_admin(user_id):
         send_with_premium(message.chat.id, "❌ Admin only!")
         return
-    apis = list_all_apis()
-    msg = "\n🔗 API ENDPOINTS\n\n\n"
-    for api in apis:
-        msg += f"📌 **/{api['command']}**\n   `{api['endpoint'][:80]}...`\n\n"
-    send_with_premium(message.chat.id, msg, parse_mode='HTML')
+    text, mk = api_list_view(with_back=False)
+    send_with_premium(message.chat.id, text, reply_markup=mk)
+
+
+def _api_map():
+    """command -> (endpoint, is_custom); custom endpoint overrides the default."""
+    out = {}
+    for a in list_all_apis():
+        if a["command"] not in out or a["is_custom"]:
+            out[a["command"]] = (a["endpoint"], a["is_custom"])
+    return out
+
+
+def api_list_view(with_back=True):
+    apis = _api_map()
+    on = sum(1 for c in apis if check_api_status(c)[0])
+    text = (f"<blockquote>🔗 <b>API Manager</b></blockquote>\n"
+            f"<blockquote>✅ Working: <b>{on}</b>   ⛔ Off: <b>{len(apis) - on}</b>\n\n"
+            f"👉 Kisi command pe tap karo — URL dekho, badlo ya ON/OFF karo.</blockquote>")
+    mk = InlineKeyboardMarkup(row_width=3)
+    btns = []
+    for c in apis:
+        dot = "🟢" if check_api_status(c)[0] else "🔴"
+        btns.append(create_primary_button(f"{dot} /{c}", callback_data=f"admin_apiv_{c}"))
+    mk.add(*btns)
+    if with_back:
+        mk.add(create_danger_button(" Back", callback_data="admin_cat_api", icon_custom_emoji_id="6138930810692049889"))
+    return text, mk
+
+
+def api_detail_view(cmd):
+    import html as _html
+    ep, custom = _api_map().get(cmd, ("—", False))
+    working, smsg = check_api_status(cmd)
+    text = (f"<blockquote>🔗 <b>/{cmd}</b></blockquote>\n"
+            f"<blockquote>📍 Status: <b>{'🟢 Working' if working else '🔴 Off'}</b>"
+            f"{(' — ' + _html.escape(smsg)) if (smsg and not working) else ''}\n"
+            f"🏷 Type: <b>{'Custom' if custom else 'Default'}</b>\n\n"
+            f"🌐 URL:\n<code>{_html.escape(str(ep))}</code></blockquote>")
+    mk = InlineKeyboardMarkup(row_width=2)
+    mk.add(create_primary_button(" Change URL", callback_data=f"admin_apiurl_{cmd}",
+                                 icon_custom_emoji_id="6030591832608479858"),
+           create_primary_button(" Turn OFF" if working else " Turn ON", callback_data=f"admin_apitog_{cmd}",
+                                 icon_custom_emoji_id="6019568309417023812"))
+    mk.add(create_danger_button(" Back", callback_data="admin_apilist", icon_custom_emoji_id="6138930810692049889"))
+    return text, mk
 
 @bot.message_handler(commands=['apic'])
 def change_api_cmd(message):
@@ -8387,6 +8428,44 @@ def callback_handler(call):
                 bot.register_next_step_handler(p2, _bcb_btn)
 
             bot.register_next_step_handler(prompt, _bcb_msg)
+            return
+
+        if call.data == "admin_apilist" or call.data.startswith(("admin_apiv_", "admin_apitog_", "admin_apiurl_")):
+            bot.answer_callback_query(call.id)
+            cid, mid = call.message.chat.id, call.message.message_id
+            if call.data == "admin_apilist":
+                t, mk = api_list_view()
+            elif call.data.startswith("admin_apitog_"):
+                c = call.data[len("admin_apitog_"):]
+                working, _m = check_api_status(c)
+                set_api_status(c, not working, None if not working else "Maintenance")
+                t, mk = api_detail_view(c)
+            elif call.data.startswith("admin_apiurl_"):
+                c = call.data[len("admin_apiurl_"):]
+                back = InlineKeyboardMarkup()
+                back.add(create_danger_button(" Back", callback_data=f"admin_apiv_{c}",
+                                              icon_custom_emoji_id="6138930810692049889"))
+                edit_with_premium(cid, mid,
+                    f"<blockquote>✏️ <b>/{c} — New URL</b>\n\nNaya API URL bhejo. Search value ki jagah "
+                    f"<code>{{query}}</code> likho.\n\nExample:\n<code>https://api.example.com/{c}?q={{query}}</code></blockquote>",
+                    reply_markup=back)
+
+                def _on_url(rm, c=c):
+                    if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
+                        return
+                    url = rm.text.strip()
+                    if not url.startswith(("http://", "https://")):
+                        bot.send_message(rm.chat.id, "❌ URL http:// ya https:// se shuru hona chahiye.")
+                        return
+                    set_api_endpoint(c, url, rm.from_user.id)
+                    t2, mk2 = api_detail_view(c)
+                    edit_with_premium(cid, mid, "✅ URL updated!\n" + t2, reply_markup=mk2)
+
+                bot.register_next_step_handler_by_chat_id(cid, _on_url)
+                return
+            else:
+                t, mk = api_detail_view(call.data[len("admin_apiv_"):])
+            edit_with_premium(cid, mid, t, reply_markup=mk)
             return
 
         if call.data in ADMIN_ACTIONS:
