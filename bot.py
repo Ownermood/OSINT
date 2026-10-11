@@ -6830,7 +6830,6 @@ ADMIN_MENUS = {
         ("Add Admin", "admin_addadm", "Send: <code>Rahul 🔥 123456789</code> (name first, then ID)", "6136525109315245846"),
         ("Remove Admin", "admin_rmlist", "Tap in the list to remove", "6138614761228606277"),
         ("Protected Numbers", "admin_protect", "These numbers stay hidden from every search", "6019328362479097179"),
-        ("Start Image", "admin_startpic", "Set the banner image shown on /start", "6021321527952153006"),
         ("User Stats", "admin_users", "Total, admin and blocked users", "6136389654636665179"),
         ("Search User", "admin_ask_searchuser", "Send: <code>123456789</code> or <code>@username</code>", "5424700761802023186"),
         ("Block User", "admin_block", "Send: <code>123456789</code>", "6138614761228606277"),
@@ -6858,8 +6857,9 @@ ADMIN_MENUS = {
         ("Button Name", "admin_ask_renamec", "Send: <code>1 Villan Community</code>", "6136165822416033423"),
         ("Force Join", "admin_fjtoggle", "Tap = ON/OFF. ON = must join channels to use the bot", "6136326046171011765"),
     ]),
-    "messages": ("Messages", [
-        ("Welcome Message", "admin_welcome", "Your own /start message · <code>{name}</code> <code>{id}</code> <code>{credits}</code> <code>{free}</code>", "5424611538151437896"),
+    "messages": ("Appearance", [
+        ("Start Message", "admin_welcome", "Your own /start text · <code>{name}</code> <code>{id}</code> <code>{credits}</code> <code>{free}</code>", "5424611538151437896"),
+        ("Start Image", "admin_startpic", "Banner image shown above /start", "6021321527952153006"),
         ("Join Message", "admin_joinmsg", "The force-join message · <code>reset</code> = default", "6136389654636665179"),
     ]),
     "api": ("API", [
@@ -9043,7 +9043,7 @@ def callback_handler(call):
             mk.add(create_success_button(" Set / Change Image", callback_data="admin_startpic_set", icon_custom_emoji_id="6021321527952153006"))
             if cur:
                 mk.add(create_danger_button(" Remove Image", callback_data="admin_startpic_clear", icon_custom_emoji_id="6021413766669801212"))
-            mk.add(create_danger_button(" Back", callback_data="admin_cat_users", icon_custom_emoji_id=ADMIN_BACK_ICON))
+            mk.add(create_danger_button(" Back", callback_data="admin_cat_messages", icon_custom_emoji_id=ADMIN_BACK_ICON))
             txt = ("🖼 <b>START IMAGE</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>"
                    + (f"Current:\n<code>{cur}</code>" if cur else "No image set. The /start message shows plain text.") + "</blockquote>\n"
                    "📌 <i>Send a public image URL (jpg/png). It shows as a banner above /start.</i>")
