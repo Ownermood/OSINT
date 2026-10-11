@@ -769,6 +769,7 @@ def send_searching_animation(chat_id):
 
         # attach stop_event to msg object so caller can reach it
         msg._stop_event = stop_event
+        _CHARGE_TL.wait, _CHARGE_TL.wait_t = msg, time.time()
         return msg
 
     except Exception as e:
@@ -909,7 +910,6 @@ API_ENDPOINTS = {
     "ifsc": "/api/ifsc?key={key}&ifsc={query}",
     "family": "PASTE_API_HERE&id={query}",   # ← API OF FAMILY INFO
     # set these from Admin → API → API Manager (they use the placeholder until then)
-    "num2": "PASTE_API_HERE/api/num2?number={query}",
     "insta": "PASTE_API_HERE/api/insta?username={query}",
     "snap": "PASTE_API_HERE/api/snap?username={query}",
 }
@@ -1461,6 +1461,7 @@ def charge_search(message):
     (daily free first, then 1 credit) only when the API returns a result.
     """
     _CHARGE_TL.pending = None
+    _CHARGE_TL.wait = None
     user_id = message.from_user.id
     _CHARGE_TL.uid = user_id
     if is_admin(user_id):
@@ -1552,6 +1553,45 @@ def _hits_protected(obj):
 PROTECTED_MSG = "🔒 This data is protected and cannot be shown."
 
 
+def _api_ok(res):
+    return bool(res) and not (isinstance(res, dict) and
+                              str(res.get("status", "")).lower() in ("error", "failed", "fail"))
+
+
+def _show_db_progress(i, n):
+    """Loader text: 'DB-1 no data · Searching DB-2/3…'"""
+    w = getattr(_CHARGE_TL, "wait", None)
+    if not w or time.time() - getattr(_CHARGE_TL, "wait_t", 0) > 90:
+        return
+    try:
+        w._stop_event.set()
+        bot.edit_message_text(f"<blockquote>⏳ DB-{i - 1}: no data found\n🔍 Searching DB-{i}/{n}…</blockquote>",
+                              w.chat.id, w.message_id, parse_mode="HTML")
+    except Exception:
+        pass
+
+
+def _run_dbs(fn, a, kw):
+    cmd = getattr(_CHARGE_TL, "cmd", None)
+    dbs = [d for d in api_dbs(cmd) if d["on"]] if cmd else []
+    if len(dbs) <= 1:          # 0/1 database → normal single search
+        return fn(*a, **kw)
+    res = None
+    for i, d in enumerate(dbs, 1):
+        if i > 1:
+            _show_db_progress(i, len(dbs))
+        _CHARGE_TL.db_url = d["url"]
+        try:
+            res = fn(*a, **kw)
+        except Exception as e:
+            res = {"status": "error", "message": str(e)}
+        finally:
+            _CHARGE_TL.db_url = None
+        if _api_ok(res) or (isinstance(res, dict) and res.get("message") == PROTECTED_MSG):
+            break
+    return res
+
+
 def _charge_on_success(fn):
     def wrapper(*a, **kw):
         _CHARGE_TL.cmd = _API_FN_CMD.get(fn.__name__)
@@ -1559,13 +1599,11 @@ def _charge_on_success(fn):
         if not owner and _hits_protected(a):
             _CHARGE_TL.pending = None
             return {"status": "error", "message": PROTECTED_MSG}
-        res = fn(*a, **kw)
+        res = _run_dbs(fn, a, kw)
         if not owner and _hits_protected(res):
             _CHARGE_TL.pending = None
             return {"status": "error", "message": PROTECTED_MSG}
-        ok = bool(res) and not (isinstance(res, dict) and
-                                str(res.get("status", "")).lower() in ("error", "failed", "fail"))
-        if ok:
+        if _api_ok(res):
             commit_search_charge()
         return res
     wrapper.__name__ = fn.__name__
@@ -2256,28 +2294,53 @@ def get_emoji_for_key(key):
 
 print("Validation functions loaded")
 
-def get_api_endpoint(command_name):
+def _norm_ep(ep):
+    """Sample value given (e.g. number=9876543210) → the last parameter becomes the search value."""
+    ep = str(ep or "").strip()
+    if ep and "{" not in ep:
+        ep = re.sub(r"=([^=&]*)$", "={query}", ep) if "=" in ep else ep + "{query}"
+    return ep
+
+
+def api_dbs(command_name):
+    """All databases of a command, in search order: [{"url": ..., "on": bool}, ...]"""
     try:
-        doc = _col_api_config.find_one({"command_name": command_name})
-        ep = doc["api_endpoint"] if doc else None
-        if ep and "{" not in ep:
-            ep = re.sub(r"=([^=&]*)$", "={query}", ep) if "=" in ep else ep + "{query}"
-        return ep
-    except:
-        return None
+        doc = _col_api_config.find_one({"command_name": command_name}) or {}
+    except Exception:
+        return []
+    dbs = doc.get("dbs")
+    if not isinstance(dbs, list):
+        dbs = [{"url": doc["api_endpoint"], "on": True}] if doc.get("api_endpoint") else []
+    return [{"url": _norm_ep(d.get("url")), "on": bool(d.get("on", True))} for d in dbs if d.get("url")]
+
+
+def save_api_dbs(command_name, dbs, admin_id=None):
+    first = next((d["url"] for d in dbs if d.get("on")), dbs[0]["url"] if dbs else "")
+    _col_api_config.update_one(
+        {"command_name": command_name},
+        {"$set": {"dbs": dbs, "api_endpoint": first, "updated_by": admin_id,
+                  "updated_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}},
+        upsert=True)
+
+
+def get_api_endpoint(command_name):
+    # while trying DB-2/DB-3..., the search uses that database's URL
+    ov = getattr(_CHARGE_TL, "db_url", None)
+    if ov and command_name == getattr(_CHARGE_TL, "cmd", None):
+        return ov
+    on = [d for d in api_dbs(command_name) if d["on"]]
+    return on[0]["url"] if on else None
 
 def set_api_endpoint(command_name, endpoint, admin_id):
-    endpoint = endpoint.strip()
-    if "{" not in endpoint:
-        # sample value given (e.g. number=9876543210) → make the last parameter the search value
-        endpoint = re.sub(r"=([^=&]*)$", "={query}", endpoint) if "=" in endpoint else endpoint + "{query}"
+    """Change URL = replace DB-1 (other databases stay)."""
+    endpoint = _norm_ep(endpoint)
     try:
-        _col_api_config.update_one(
-            {"command_name": command_name},
-            {"$set": {"api_endpoint": endpoint, "updated_by": admin_id,
-                      "updated_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}},
-            upsert=True
-        )
+        dbs = api_dbs(command_name)
+        if dbs:
+            dbs[0]["url"] = endpoint
+        else:
+            dbs = [{"url": endpoint, "on": True}]
+        save_api_dbs(command_name, dbs, admin_id)
         return True, f"API endpoint updated for /{command_name}"
     except Exception as e:
         return False, f"Error: {str(e)}"
@@ -2288,7 +2351,8 @@ def list_all_apis():
         apis.append({"command": cmd, "endpoint": endpoint, "is_custom": False})
     try:
         for doc in _col_api_config.find({}):
-            apis.append({"command": doc["command_name"], "endpoint": doc["api_endpoint"], "is_custom": True})
+            if doc.get("api_endpoint") and doc.get("command_name") in API_ENDPOINTS:
+                apis.append({"command": doc["command_name"], "endpoint": doc["api_endpoint"], "is_custom": True})
     except:
         pass
     return apis
@@ -2383,6 +2447,50 @@ def make_api_request(url, timeout=10):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+def _keynorm(k):
+    return re.sub(r"[^a-z0-9]", "", str(k).lower())
+
+
+def _pick(rec, *names):
+    """First non-empty value among the given field names (any case / _ / - / space)."""
+    m = {_keynorm(k): v for k, v in rec.items()}
+    for n in names:
+        v = m.get(_keynorm(n))
+        if v not in (None, "", [], {}) and str(v).strip().lower() not in ("null", "none", "n/a", "na", "-"):
+            return v if not isinstance(v, (dict, list)) else ", ".join(str(x) for x in (v.values() if isinstance(v, dict) else v))
+    return None
+
+
+_REC_KEYS = ("results", "records", "data", "result", "response", "info", "details", "items", "list", "rows")
+
+
+def _find_records(data, depth=0):
+    """Find the list of person records inside any API response shape."""
+    if depth > 4:
+        return []
+    if isinstance(data, list):
+        recs = [x for x in data if isinstance(x, dict)]
+        if any(_pick(x, "name", "mobile", "phone", "number", "address", "fname", "father_name") for x in recs):
+            return recs
+        for x in data:
+            r = _find_records(x, depth + 1)
+            if r:
+                return r
+        return []
+    if isinstance(data, dict):
+        if data.get("success") is False or str(data.get("status", "")).lower() in ("error", "failed", "fail", "false"):
+            return []
+        for want in _REC_KEYS:
+            for k, v in data.items():
+                if _keynorm(k) == want and isinstance(v, (list, dict)):
+                    r = _find_records(v, depth + 1)
+                    if r:
+                        return r
+        if _pick(data, "name", "address", "fname", "father_name", "full_name"):
+            return [data]
+    return []
+
+
 def call_phone_api(phone):
     """
     API: PASTE_YOUR_NUM_INFO_API_HERE
@@ -2396,48 +2504,41 @@ def call_phone_api(phone):
         url = f"PASTE_API_HERE/api/num?number={phone}"   # ← API OF NUM INFO
         data = make_api_request(url, timeout=20)
 
-        if not isinstance(data, dict):
-            return {"status": "error", "message": "NO DATA FOUND"}
-        if not data.get("success"):
-            return {"status": "error", "message": data.get("message", "NO DATA FOUND")}
-
-        # New API uses "results", old used "records"
-        raw = data.get("results", data.get("records", []))
+        raw = _find_records(data)
         if not raw:
-            return {"status": "error", "message": "NO DATA FOUND"}
+            msg = data.get("message") if isinstance(data, dict) else None
+            return {"status": "error", "message": str(msg or "NO DATA FOUND")}
 
         records = []
         for r in raw:
-            if not isinstance(r, dict):
-                continue
-            # field name normalisation: new API uses alt/fname, old used alt_number/father
-            alt_val = (r.get("alt") or r.get("alt_number") or
-                       r.get("alternate") or r.get("altNumber") or "N/A")
-            fname   = (r.get("fname") or r.get("father") or
-                       r.get("father_name") or r.get("fatherName") or "N/A")
-            tc_name = r.get("truecaller_name", "N/A")
-            name    = r.get("name", "N/A")
+            P = lambda *k: _pick(r, *k)
+            tc_name = str(P("truecaller_name", "tc_name", "truecaller") or "N/A")
             # ignore placeholder truecaller labels
-            if tc_name and tc_name.lower() in ("test label", "n/a", "none", ""):
+            if tc_name.lower() in ("test label", "n/a", "none", ""):
                 tc_name = "N/A"
+            email = P("email", "mail", "email_id", "emailid")
             records.append({
                 "record_no":       len(records) + 1,
-                "mobile":          str(r.get("mobile", "N/A")).strip(),
-                "name":            name,
+                "mobile":          str(P("mobile", "phone", "number", "mobile_no", "mobileno", "phone_number",
+                                         "phoneno", "msisdn", "num", "contact") or phone).strip(),
+                "name":            P("name", "full_name", "fullname", "owner_name", "subscriber_name", "username") or "N/A",
                 "truecaller_name": tc_name,
-                "father_name":     fname,
-                "address":         str(r.get("address", "N/A")).replace("!", ", "),
-                "circle":          r.get("circle", "N/A"),
-                "alternate":       alt_val,
-                "id":              str(r.get("id", "N/A")),
-                "email":           (r.get("email") if r.get("email") and
-                                    r.get("email") not in ("N/A","default@unspecify.com") else "N/A"),
+                "father_name":     P("fname", "father", "father_name", "fathers_name", "guardian",
+                                     "relative_name", "co", "s_o") or "N/A",
+                "address":         str(P("address", "addr", "full_address", "permanent_address", "location",
+                                         "city") or "N/A").replace("!", ", "),
+                "circle":          P("circle", "operator", "carrier", "telecom", "network", "sim", "state") or "N/A",
+                "alternate":       P("alt", "alt_number", "alternate", "alternate_number", "alt_mobile",
+                                     "alternative", "other_number") or "N/A",
+                "id":              str(P("id", "aadhar", "aadhaar", "id_number", "aadhar_number", "document",
+                                         "id_proof") or "N/A"),
+                "email":           (str(email) if email and email not in ("N/A", "default@unspecify.com") else "N/A"),
             })
 
         return clean_dict({
             "status":  "success",
-            "number":  data.get("number", phone),
-            "total":   data.get("total", data.get("total_records", len(records))),
+            "number":  (data.get("number") if isinstance(data, dict) else None) or phone,
+            "total":   len(records),
             "records": records,
         })
 
@@ -4890,7 +4991,7 @@ def tgid_cmd(message):
     if sent_msg:
         send_random_media(chat_id, sent_msg.message_id)
 
-@bot.message_handler(commands=['num'])
+@bot.message_handler(commands=['num', 'num2'])
 def num_cmd(message):
     if not is_recent_command(message):
         return
@@ -5680,7 +5781,6 @@ def start_cmd(message):
         f"{_s(DIAM,'💎')} <b>OSINT COMMANDS:</b>\n\n"
         f"{_s(PHONE,'☎️')} /num <code>9876543210</code> - Indian Phone\n"
         f"{_s(PLANE,'✈️')} /tgid <code>username</code> - Telegram info (Phone lookup)\n"
-        f"{_s(PHONE2,'📞')} /num2 <code>9876543210</code> - Phone number info (Alternate API)\n"
         f"{_s(GROUP,'👥')} /name <code>abhiraaj</code> - Name to details\n"
         f"{_s(CARD1,'💳')} /pan <code>AXDPR2606K</code> - PAN Card info\n"
         f"{_s(CARD2,'💳')} /adhr <code>393933081942</code> - Aadhar info\n"
@@ -5823,7 +5923,6 @@ def help_cmd(message):
         f"{_h(H_DIAM,'💎')} <b>OSINT COMMANDS:</b>\n\n"
         f"{_h(H_PHONE,'☎️')} /num <code>9876543210</code> - Indian Phone\n"
         f"{_h(H_PLANE,'✈️')} /tgid <code>username</code> - Telegram info (Phone lookup)\n"
-        f"{_h(H_PHONE2,'📞')} /num2 <code>9876543210</code> - Phone number info (Alternate API)\n"
         f"{_h(H_GROUP,'👥')} /name <code>abhiraaj</code> - Name to details\n"
         f"{_h(H_CARD1,'💳')} /pan <code>AXDPR2606K</code> - PAN Card info\n"
         f"{_h(H_CARD2,'💳')} /adhr <code>393933081942</code> - Aadhar info\n"
@@ -6608,8 +6707,7 @@ def ai_cmd(message):
         if sent_msg:
             send_random_media(chat_id, sent_msg.message_id)
 
-@bot.message_handler(commands=['num2'])
-def num2_cmd(message):
+def num2_cmd(message):   # /num2 now runs /num (its API is DB-2 of /num)
     if not is_recent_command(message):
         return
 
@@ -8224,7 +8322,8 @@ def api_list_view(with_back=True):
     on = sum(1 for c in apis if check_api_status(c)[0])
     text = (f"<blockquote>💻 <b>API Manager</b></blockquote>\n"
             f"<blockquote>✅ Working: <b>{on}</b>   ⛔ Off: <b>{len(apis) - on}</b>\n\n"
-            f"👉 Tap a command to view, change or toggle its URL.\n✅ Blue button = working · ⚠️ Red button = off</blockquote>")
+            f"👉 Tap a command to manage its databases (DB-1, DB-2…): add, remove, edit, on/off.\n"
+            f"✅ Blue button = working · ⚠️ Red button = off</blockquote>")
     mk = InlineKeyboardMarkup(row_width=3)
     btns = []
     for c in apis:
@@ -8244,15 +8343,37 @@ def api_detail_view(cmd):
     import html as _html
     ep, custom = _api_map().get(cmd, ("—", False))
     working, smsg = check_api_status(cmd)
-    text = (f"<blockquote>💻 <b>/{cmd}</b></blockquote>\n"
-            f"<blockquote>📍 Status: <b>{'✅ Working' if working else '⚠️ Off'}</b>"
+    dbs = api_dbs(cmd)
+    esc = lambda u: str(u).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    if dbs:
+        rows = "\n\n".join(f"{'✅' if d['on'] else '⛔'} <b>DB-{i}</b> — {'ON' if d['on'] else 'OFF'}\n<code>{esc(d['url'])}</code>"
+                            for i, d in enumerate(dbs, 1))
+    elif str(ep).startswith(("PASTE", "/")) or ep == "—":
+        rows = "⚠️ No database yet — tap <b>Add DB</b>."
+    else:
+        rows = f"✅ <b>DB-1</b> — built-in\n<code>{esc(ep)}</code>"
+    on = sum(1 for d in dbs if d["on"])
+    text = (f"<blockquote>💻 <b>/{cmd}</b> — API Manager</blockquote>\n"
+            f"<blockquote>📍 Command: <b>{'✅ ON' if working else '⛔ OFF'}</b>"
             f"{(' — ' + _html.escape(smsg)) if (smsg and not working) else ''}\n"
-            f"🏷 Type: <b>{'Custom' if custom else ('⚠️ Not set — tap Change URL' if str(ep).startswith(('PASTE', '/')) else 'Default')}</b>\n\n"
-            f"🌐 URL:\n<code>{str(ep).replace('<', '&lt;').replace('>', '&gt;')}</code></blockquote>")
-    mk = InlineKeyboardMarkup(row_width=2)
-    mk.add(create_primary_button(" Change URL", callback_data=f"admin_apiurl_{cmd}",
-                                 icon_custom_emoji_id="6030591832608479858"),
-           create_primary_button(" Turn OFF" if working else " Turn ON", callback_data=f"admin_apitog_{cmd}",
+            f"🗄 Databases: <b>{len(dbs)}</b> ({on} ON)</blockquote>\n"
+            f"<blockquote>{rows}</blockquote>\n"
+            f"<blockquote>🔁 <b>How it works:</b> a search tries DB-1 first. If it finds nothing (or is down), "
+            f"it tries DB-2, then DB-3… Users see <i>Searching DB-2…</i>. Credit is charged once, only when data is found.\n\n"
+            f"✅/⛔ = turn a DB on/off · ✏️ = change its URL · 🗑 = remove it</blockquote>")
+    mk = InlineKeyboardMarkup(row_width=3)
+    for i, d in enumerate(dbs, 1):
+        mk.row(
+            (create_primary_button if d["on"] else create_danger_button)(
+                f" DB-{i}: {'ON' if d['on'] else 'OFF'}", callback_data=f"admin_apidb_t_{i}_{cmd}",
+                icon_custom_emoji_id="6019568309417023812"),
+            create_primary_button(f" Edit {i}", callback_data=f"admin_apidb_e_{i}_{cmd}",
+                                  icon_custom_emoji_id="6030591832608479858"),
+            create_danger_button(f" Del {i}", callback_data=f"admin_apidb_d_{i}_{cmd}",
+                                 icon_custom_emoji_id="6021413766669801212"))
+    mk.add(create_success_button(f" Add DB-{len(dbs) + 1}", callback_data=f"admin_apidb_a_0_{cmd}",
+                                 icon_custom_emoji_id="6136204644625423818"),
+           create_primary_button(" Command OFF" if working else " Command ON", callback_data=f"admin_apitog_{cmd}",
                                  icon_custom_emoji_id="6019568309417023812"))
     mk.add(create_danger_button(" Back", callback_data="admin_apilist", icon_custom_emoji_id="6138930810692049889"))
     return text, mk
@@ -9269,6 +9390,63 @@ def callback_handler(call):
             bot.register_next_step_handler(prompt, _bcb_msg)
             return
 
+        if call.data.startswith("admin_apidb_"):
+            if not is_admin(call.from_user.id):
+                bot.answer_callback_query(call.id, "Admins only")
+                return
+            op, idx, c = call.data[len("admin_apidb_"):].split("_", 2)
+            idx = int(idx)
+            cid, mid = call.message.chat.id, call.message.message_id
+            dbs = api_dbs(c)
+            if op in ("t", "d", "e") and not 1 <= idx <= len(dbs):
+                bot.answer_callback_query(call.id, "This DB no longer exists")
+                t, mk = api_detail_view(c)
+                edit_with_premium(cid, mid, t, reply_markup=mk)
+                return
+            if op == "t":
+                dbs[idx - 1]["on"] = not dbs[idx - 1]["on"]
+                save_api_dbs(c, dbs, call.from_user.id)
+                bot.answer_callback_query(call.id, f"DB-{idx} {'ON' if dbs[idx - 1]['on'] else 'OFF'}")
+            elif op == "d":
+                dbs.pop(idx - 1)
+                save_api_dbs(c, dbs, call.from_user.id)
+                bot.answer_callback_query(call.id, f"DB-{idx} removed")
+            else:   # add / edit → ask for the URL
+                bot.answer_callback_query(call.id)
+                n = idx if op == "e" else len(dbs) + 1
+                back = InlineKeyboardMarkup()
+                back.add(create_danger_button(" Cancel", callback_data=f"admin_apiv_{c}",
+                                              icon_custom_emoji_id="6138930810692049889"))
+                edit_with_premium(cid, mid,
+                    f"<blockquote>✏️ <b>/{c} — {'Edit' if op == 'e' else 'Add'} DB-{n}</b></blockquote>\n"
+                    f"<blockquote>Send the API URL. Put <code>{{query}}</code> where the search value goes.\n\n"
+                    f"📌 Example:\n<code>https://api.example.com/{c}?key=ABC&q={{query}}</code>\n\n"
+                    f"💡 Or paste a working URL with a sample value at the end — the bot replaces the last value "
+                    f"automatically:\n<code>https://api.example.com/{c}?number=9876543210</code></blockquote>",
+                    reply_markup=back)
+
+                def _on_db_url(rm, c=c, op=op, n=n):
+                    if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
+                        return
+                    url = rm.text.strip()
+                    if not url.startswith(("http://", "https://")):
+                        bot.send_message(rm.chat.id, "❌ URL must start with http:// or https:// — tap the DB button again.")
+                        return
+                    cur = api_dbs(c)
+                    if op == "e" and 1 <= n <= len(cur):
+                        cur[n - 1]["url"] = _norm_ep(url)
+                    else:
+                        cur.append({"url": _norm_ep(url), "on": True})
+                    save_api_dbs(c, cur, rm.from_user.id)
+                    t2, mk2 = api_detail_view(c)
+                    edit_with_premium(cid, mid, f"✅ DB-{n} saved!\n" + t2, reply_markup=mk2)
+
+                bot.register_next_step_handler_by_chat_id(cid, _on_db_url)
+                return
+            t, mk = api_detail_view(c)
+            edit_with_premium(cid, mid, t, reply_markup=mk)
+            return
+
         if call.data == "admin_apilist" or call.data.startswith(("admin_apiv_", "admin_apitog_", "admin_apiurl_")):
             bot.answer_callback_query(call.id)
             cid, mid = call.message.chat.id, call.message.message_id
@@ -9986,6 +10164,26 @@ for _m, _f in (("send_message", ("text", "reply_markup")),
 
 
 load_api_status()
+
+
+def _merge_num2_into_num():
+    """Old /num2 API becomes the next database of /num (runs once)."""
+    try:
+        doc = _col_api_config.find_one({"command_name": "num2"})
+        if not doc:
+            return
+        url = _norm_ep(doc.get("api_endpoint"))
+        dbs = api_dbs("num")
+        if url and not url.startswith("PASTE") and url not in [d["url"] for d in dbs]:
+            dbs.append({"url": url, "on": True})
+            save_api_dbs("num", dbs)
+        _col_api_config.delete_one({"command_name": "num2"})
+        print("✅ /num2 API merged into /num as a backup database")
+    except Exception as e:
+        print(f"num2 merge: {e}")
+
+
+_merge_num2_into_num()
 
 # remember Force Join ON/OFF across restarts
 FORCE_JOIN_ENABLED = bool(get_setting("force_join", True))
