@@ -6724,6 +6724,22 @@ def admin_back_markup(cat=None):
     return markup
 
 
+def _run_in_place(fn, msg, chat_id, message_id, cat):
+    """Run an admin command and show its reply inside the panel message (with Back)."""
+    _EDIT_TL.target = (chat_id, message_id, admin_back_markup(cat))
+    try:
+        fn(msg)
+    finally:
+        unused = getattr(_EDIT_TL, "target", None)
+        _EDIT_TL.target = None
+    if unused:
+        # command replied some other way (or not at all) — just give Back on the panel
+        try:
+            bot.edit_message_reply_markup(chat_id, message_id, reply_markup=admin_back_markup(cat))
+        except Exception:
+            pass
+
+
 def admin_main_text():
     return (f"<blockquote>{te(ADMIN_HOME_ICON, '🏆')} <b>{sc('Admin Panel')}</b> {te(ADMIN_HOME_ICON, '🏆')}</blockquote>\n"
             f"<blockquote>{te('6138500424904219564', '➡️')} {sc('Choose a section below')}</blockquote>")
@@ -8317,8 +8333,7 @@ def callback_handler(call):
             cat, label, desc = _admin_action_info(call.data)
             bot.answer_callback_query(call.id)
             if not needs_input:
-                fn(_cb_msg(cmd))
-                bot.send_message(call.message.chat.id, "↩️", reply_markup=admin_back_markup(cat))
+                _run_in_place(fn, _cb_msg(cmd), call.message.chat.id, call.message.message_id, cat)
                 return
             prompt = bot.send_message(
                 call.message.chat.id,
@@ -8331,8 +8346,7 @@ def callback_handler(call):
                     bot.send_message(rm.chat.id, "❌ Cancelled.", reply_markup=admin_back_markup(cat))
                     return
                 rm.text = f"{cmd} {rm.text.strip()}"
-                fn(rm)
-                bot.send_message(rm.chat.id, "↩️", reply_markup=admin_back_markup(cat))
+                _run_in_place(fn, rm, prompt.chat.id, prompt.message_id, cat)
 
             bot.register_next_step_handler(prompt, _on_reply)
             return
