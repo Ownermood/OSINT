@@ -1462,9 +1462,9 @@ def get_all_group_chats():
         return []
 
 DEFAULT_FORCE_CHANNELS = [
-    ("https://t.me/VillanCommunity", "-1004443904846"),
-    ("https://t.me/VillanSupport", "-1004293604271"),
-    ("https://t.me/+JCEpc-yLmM5kYTll", "-1004312463146"),
+    ("https://t.me/VillanCommunity", "-1004443904846", "Villan Community"),
+    ("https://t.me/VillanSupport", "-1004293604271", "Villain Sell Log"),
+    ("https://t.me/+JCEpc-yLmM5kYTll", "-1004312463146", "Villan Search GC"),
 ]
 _OLD_DEFAULT_CHANNELS = ["bynxgc", "Osintxarmy", "OSINT_BY_NX"]
 
@@ -1474,8 +1474,10 @@ def load_channels_from_db():
     try:
         # remove old repo channels, make sure our channels exist
         _col_channels.delete_many({"username": {"$in": _OLD_DEFAULT_CHANNELS}})
-        for _u, _n in DEFAULT_FORCE_CHANNELS:
+        for _u, _n, _nm in DEFAULT_FORCE_CHANNELS:
             try:
+                _col_channels.update_one({"username": _n, "name": {"$exists": False}},
+                                         {"$set": {"name": _nm}})
                 _col_channels.update_one(
                     {"username": _n},
                     {"$set": {"url": _u, "enabled": 1, "is_private": 1},
@@ -1491,10 +1493,11 @@ def load_channels_from_db():
                 "username": d["username"],
                 "enabled": bool(d.get("enabled", 1)),
                 "is_private": bool(d.get("is_private", 0)),
+                "name": d.get("name") or "",
                 "join_by_request": bool(d.get("join_by_request", 0)),
             } for d in docs]
         else:
-            default_channels = [(u, n, True) for u, n in DEFAULT_FORCE_CHANNELS]
+            default_channels = [(u, n, True) for u, n, _nm in DEFAULT_FORCE_CHANNELS]
             for url, username, enabled in default_channels:
                 try:
                     _col_channels.insert_one({
@@ -1620,7 +1623,7 @@ def get_missing_channels(user_id):
             uname = channel.get('username', '')
             user_sent = JOIN_REQUESTS_SENT.get(user_id, set())
             if uname not in user_sent:
-                missing.append(channel['url'])
+                missing.append(channel)
             continue
 
         # ── normal / private channel ──
@@ -1628,36 +1631,91 @@ def get_missing_channels(user_id):
             ref    = _channel_chat_ref(channel)
             member = bot.get_chat_member(ref, user_id)
             if member.status not in ['member', 'administrator', 'creator']:
-                missing.append(channel['url'])
+                if channel.get('username', '') not in JOIN_REQUESTS_SENT.get(user_id, set()):
+                    missing.append(channel)
         except Exception as e:
             # any failure = treat as not joined (strict)
-            missing.append(channel['url'])
+            missing.append(channel)
     return missing
+
+_SC_MAP = str.maketrans("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                        "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ")
+
+
+def sc(text):
+    """Small-caps font (ɴᴏᴛɪᴄᴇ style). Only plain text — not HTML tags."""
+    return re.sub(r"(<[^>]+>)|([^<]+)", lambda m: m.group(1) or m.group(2).translate(_SC_MAP), text)
+
+
+_col_settings = _db["bot_settings"]
+
+
+def get_setting(key, default=None):
+    try:
+        doc = _col_settings.find_one({"_id": key})
+        return doc["value"] if doc else default
+    except Exception:
+        return default
+
+
+def set_setting(key, value):
+    try:
+        if value is None:
+            _col_settings.delete_one({"_id": key})
+        else:
+            _col_settings.update_one({"_id": key}, {"$set": {"value": value}}, upsert=True)
+        return True
+    except Exception:
+        return False
+
+
+def default_join_text():
+    E = lambda i, f: te(i, f)
+    return (
+        f"<blockquote>{E('6138680877955160519','🚨')} <b>{sc('Notice')}</b> {E('6138680877955160519','🚨')}</blockquote>\n"
+        f"<blockquote>{E('5424611538151437896','👋')} {sc('Hey! To use this bot, please join our community first.')}\n\n"
+        f"{E('6136525109315245846','✨')} {sc('Free searches every day')}\n"
+        f"{E('6136326046171011765','⚡')} {sc('Fast and accurate results')}\n"
+        f"{E('6136231213293116410','🏆')} {sc('Latest updates and offers')}</blockquote>\n"
+        f"<blockquote>{E('6138500424904219564','➡️')} {sc('Join all below, then tap')} <b>{sc('Verify')}</b></blockquote>"
+    )
+
 
 def force_join_message(chat_id, user_id):
     missing = get_missing_channels(user_id)
     if not missing:
         return None
-    channels_text = "\n".join([f"{i+1}. {ch}" for i, ch in enumerate(missing)])
-    msg = f"""
-FORCE JOIN REQUIRED
-
- YOU MUST JOIN ALL CHANNELS TO USE THIS BOT!
-
-CHANNELS TO JOIN:
-{channels_text}
-
- After joining all channels, click the button below to verify!
-"""
+    msg = get_setting("join_text") or default_join_text()
     markup = InlineKeyboardMarkup(row_width=1)
-    for channel in missing:
-        markup.add(create_primary_button("Join Channel", url=channel, icon_custom_emoji_id="5219899949281453881"))
-    markup.add(create_success_button("I've Joined All", callback_data="check_join", icon_custom_emoji_id="5339247212012528642"))
+    for i, ch in enumerate(missing, 1):
+        name = ch.get("name") or f"Join Channel {i}"
+        markup.add(create_primary_button(" " + sc(name), url=ch["url"],
+                                         icon_custom_emoji_id="6136367002979146040"))
+    markup.add(create_success_button(" " + sc("Verify"), callback_data="check_join",
+                                     icon_custom_emoji_id="6136330925253860126"))
     try:
         return send_with_premium(chat_id, msg, reply_markup=markup)
     except Exception as e:
         print(f"Force join message error: {e}")
         return None
+
+
+def rename_channel_cmd(message):
+    """/renamec <number> <name>  — number from List Channels order."""
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split(maxsplit=2)
+    chans = list_force_join_channels()
+    if len(parts) < 3 or not parts[1].isdigit() or not (1 <= int(parts[1]) <= len(chans)):
+        lines = [f"{i}. {c[2]} — {c[1]}" for i, c in enumerate(chans, 1)]
+        send_with_premium(message.chat.id, "❌ Format: <code>number name</code>\n\n" + "\n".join(lines))
+        return
+    _id = chans[int(parts[1]) - 1][0]
+    from bson import ObjectId
+    _col_channels.update_one({"_id": ObjectId(_id)}, {"$set": {"name": parts[2].strip()}})
+    load_channels_from_db()
+    send_with_premium(message.chat.id, f"✅ Button name set: <b>{parts[2].strip()}</b>")
+
 
 def _enforce_verify_gate(message):
     """
@@ -6463,6 +6521,8 @@ ADMIN_MENUS = {
         ("➕ Add Channel", "admin_ask_addc", "Force join channel jodo. Bot step-by-step puchega: pehle Chat ID (<code>-1004443904846</code>), phir link (<code>https://t.me/VillanCommunity</code>). Bot ko channel mein admin banana zaroori hai."),
         ("➖ Remove Channel", "admin_ask_removec", "Channel hatao. Example: <code>VillanCommunity</code>"),
         ("📋 List Channels", "admin_run_listc", "Saare force join channels."),
+        ("✏️ Button Name", "admin_ask_renamec", "Join button pe naam. Format: <code>number naam</code>. Example: <code>1 Villan Community</code> (number List Channels ke order se)"),
+        ("📝 Join Message", "admin_joinmsg", "Force join ka message khud likho (premium emoji, bold, quote sab chalega). <code>reset</code> bhejo to default wapas."),
         ("🔒 Lock Force Join", "admin_run_lockf", "Force join ON."),
         ("🔓 Unlock Force Join", "admin_run_unlockf", "Force join OFF."),
     ]),
@@ -6517,6 +6577,7 @@ ADMIN_ACTIONS = {
     "admin_ask_addc": ("add_channel_cmd", "/addc", False),
     "admin_ask_removec": ("remove_channel_cmd", "/removec", True),
     "admin_run_listc": ("list_channels_cmd", "/listc", False),
+    "admin_ask_renamec": ("rename_channel_cmd", "/renamec", True),
     "admin_run_lockf": ("lock_force_join_cmd", "/lockf", False),
     "admin_run_unlockf": ("unlock_force_join_cmd", "/unlockf", False),
     "admin_run_api": ("list_apis_cmd", "/api", False),
@@ -8038,6 +8099,33 @@ def callback_handler(call):
                 threading.Thread(target=broadcast_copy, args=(rm.chat.id, rm), daemon=True).start()
 
             bot.register_next_step_handler(prompt, _on_bc)
+            return
+
+        if call.data == "admin_joinmsg":
+            bot.answer_callback_query(call.id)
+            prompt = bot.send_message(
+                call.message.chat.id,
+                "<blockquote><b>📝 Join Message</b>\n\nNaya force join message bhejo "
+                "(premium emoji, bold, quote sab chalega).\n<code>reset</code> bhejo to default design wapas.</blockquote>",
+                parse_mode="HTML", reply_markup=admin_back_markup("channels"))
+
+            def _on_jm(rm):
+                if not is_admin(rm.from_user.id) or not rm.text or rm.text.startswith("/"):
+                    bot.send_message(rm.chat.id, "❌ Cancelled.", reply_markup=admin_back_markup("channels"))
+                    return
+                if rm.text.strip().lower() == "reset":
+                    set_setting("join_text", None)
+                    bot.send_message(rm.chat.id, "✅ Default join message set.", reply_markup=admin_back_markup("channels"))
+                    return
+                html = getattr(rm, "html_text", None) or rm.text
+                set_setting("join_text", html)
+                bot.send_message(rm.chat.id, "✅ Join message saved. Preview 👇", reply_markup=admin_back_markup("channels"))
+                try:
+                    send_with_premium(rm.chat.id, html)
+                except Exception as e:
+                    bot.send_message(rm.chat.id, f"⚠️ Preview failed: {e}")
+
+            bot.register_next_step_handler(prompt, _on_jm)
             return
 
         if call.data == "admin_bcbtn":
