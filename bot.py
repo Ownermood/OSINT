@@ -7224,7 +7224,11 @@ def protect_view():
     body = "\n".join(rows) or "No protected numbers yet."
     text = (f"🔒 <b>PROTECTED NUMBERS · {len(docs)}</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>{body}</blockquote>\n"
             f"📌 <i>Number 🔒 and Telegram ID 🆔 both stay hidden from every search (except the owner).</i>\n"
-            f"📌 <i>/protect user_id number days  ·  days 0 = lifetime  ·  /unprotect number</i>")
+            f"<blockquote>📌 <b>Examples</b>\n"
+            f"Protect 30 days → <code>/protect 7253190792 9876543210 30</code>\n"
+            f"Lifetime → <code>/protect 7253190792 9876543210 0</code>\n"
+            f"Remove → <code>/unprotect 9876543210</code></blockquote>\n"
+            f"<i>Or tap Add Protection below.</i>")
     mk = InlineKeyboardMarkup(row_width=1)
     mk.add(create_success_button(" Add Protection", callback_data="admin_protadd", icon_custom_emoji_id="6019328362479097179"))
     for d in docs[:30]:
@@ -9458,9 +9462,15 @@ def callback_handler(call):
                 bot.answer_callback_query(call.id)
                 back = InlineKeyboardMarkup()
                 back.add(create_primary_button(" Cancel", callback_data="admin_protect", icon_custom_emoji_id=ADMIN_BACK_ICON))
-                edit_with_premium(cid, mid, "🔒 <b>ADD PROTECTION</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Bhejo:  "
-                                  "<b>user_id  number  days</b>\n\n<code>123456789 9876543210 30</code>\n\n"
-                                  "👤 user_id = owner of the number\n📱 number = number to protect\n⏳ days = how many days (0 = lifetime)</blockquote>",
+                edit_with_premium(cid, mid, "🔒 <b>ADD PROTECTION</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>Send:  "
+                                  "<b>user_id  number  days</b>\n\n"
+                                  "🆔 user_id = Telegram ID of the person (their ID gets protected too)\n"
+                                  "📱 number = their phone number\n⏳ days = how many days (0 = lifetime)</blockquote>\n"
+                                  "<blockquote>📌 <b>Examples</b>\n"
+                                  "30 days → <code>7253190792 9876543210 30</code>\n"
+                                  "7 days → <code>7253190792 9876543210 7</code>\n"
+                                  "Lifetime → <code>7253190792 9876543210 0</code></blockquote>\n"
+                                  "<i>Tap an example to copy it, then change the ID and number.</i>",
                                   reply_markup=back)
 
                 def _on_prot(rm):
