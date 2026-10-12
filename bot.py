@@ -7405,7 +7405,7 @@ def finish_redeem_code(st, admin_id, cid, mid):
     done = (f"✅ <b>Code created!</b>\n<blockquote>🎟 <code>{st['code']}</code>\n💰 {st['credits']} credits · "
             f"👥 {st['max']} users\n\nUsers redeem with: <code>/redeem {st['code']}</code></blockquote>\n"
             f"📌 <i>Tap the code or the Copy button to copy it.</i>\n"
-            f"🌸 Thank you ➜ @{bot.get_me().username}\n\n") if ok else f"❌ {m}\n\n"
+            f"🌸 Thankyou @{bot.get_me().username}\n\n") if ok else f"❌ {m}\n\n"
     edit_with_premium(cid, mid, done + t, reply_markup=mk)
 
 
