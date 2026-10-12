@@ -1525,7 +1525,10 @@ def _active_q():
 def protected_numbers():
     if time.time() - _PROTECTED_CACHE["t"] > 30:
         try:
-            _PROTECTED_CACHE["set"] = {d["num"] for d in _col_protected.find(_active_q(), {"num": 1})}
+            docs = list(_col_protected.find(_active_q(), {"num": 1, "user_id": 1}))
+            _PROTECTED_CACHE["set"] = {d["num"] for d in docs}
+            # the protected person's Telegram ID is hidden too (no /tgid → number lookup)
+            _PROTECTED_CACHE["uids"] = {str(d["user_id"]) for d in docs if d.get("user_id")}
         except Exception:
             pass
         _PROTECTED_CACHE["t"] = time.time()
@@ -1551,9 +1554,13 @@ def _fmt_left(exp):
 
 def _hits_protected(obj):
     prot = protected_numbers()
-    if not prot:
+    uids = _PROTECTED_CACHE.get("uids") or set()
+    if not prot and not uids:
         return False
-    found = {_norm_num(m) for m in re.findall(r"\d[\d\s+-]{8,16}\d", str(obj))}
+    txt = str(obj)
+    if uids and set(re.findall(r"(?<!\d)\d{5,15}(?!\d)", txt)) & uids:
+        return True
+    found = {_norm_num(m) for m in re.findall(r"\d[\d\s+-]{8,16}\d", txt)}
     return bool(found & prot)
 
 
@@ -7213,10 +7220,10 @@ def protect_view():
         docs = []
     rows = []
     for d in docs:
-        rows.append(f"🔒 <code>{d['num']}</code> · 👤 <code>{d.get('user_id','?')}</code> · ⏳ {_fmt_left(d.get('expire_ts',0))}")
+        rows.append(f"🔒 <code>{d['num']}</code> · 🆔 <code>{d.get('user_id','?')}</code> · ⏳ {_fmt_left(d.get('expire_ts',0))}")
     body = "\n".join(rows) or "No protected numbers yet."
     text = (f"🔒 <b>PROTECTED NUMBERS · {len(docs)}</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>{body}</blockquote>\n"
-            f"📌 <i>These numbers stay hidden from every search (except the owner).</i>\n"
+            f"📌 <i>Number 🔒 and Telegram ID 🆔 both stay hidden from every search (except the owner).</i>\n"
             f"📌 <i>/protect user_id number days  ·  days 0 = lifetime  ·  /unprotect number</i>")
     mk = InlineKeyboardMarkup(row_width=1)
     mk.add(create_success_button(" Add Protection", callback_data="admin_protadd", icon_custom_emoji_id="6019328362479097179"))
@@ -9076,13 +9083,24 @@ def callback_handler(call):
 
         if call.data == "myprotect":
             bot.answer_callback_query(call.id)
+            if is_admin(call.from_user.id):   # admins manage all protections right here
+                t, mk = protect_view()
+                mk.keyboard[-1] = [create_danger_button(" Back", callback_data="back_start",
+                                                        icon_custom_emoji_id="6138930810692049889")]
+                try:
+                    edit_with_premium(call.message.chat.id, call.message.message_id, t, reply_markup=mk)
+                except Exception:
+                    send_with_premium(call.message.chat.id, t, reply_markup=mk)
+                return
             docs = user_protections(call.from_user.id)
             if docs:
-                rows = "\n".join(f"🔒 <code>{d['num']}</code> · ⏳ {_fmt_left(d.get('expire_ts',0))}" for d in docs)
+                rows = "\n".join(f"📱 Number : <code>{d['num']}</code> · ⏳ {_fmt_left(d.get('expire_ts',0))}" for d in docs)
+                rows += f"\n🆔 Telegram ID : <code>{call.from_user.id}</code> · protected"
             else:
-                rows = "You have no protected numbers."
+                rows = "You have no protection yet."
             txt = (f"🔒 <b>MY PROTECTION</b>\n━━━━━━━━━━━━━━━━━━━━\n<blockquote>{rows}</blockquote>\n"
-                   f"📌 <i>A protected number stays hidden from every search.</i>")
+                   f"📌 <i>Your number and Telegram ID stay hidden from every search — "
+                   f"nobody can find your info by number or by ID.</i>")
             back = InlineKeyboardMarkup()
             back.add(create_default_button(" Back", callback_data="back_start", icon_custom_emoji_id="6138930810692049889"))
             try:
