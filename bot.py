@@ -7404,9 +7404,18 @@ def finish_redeem_code(st, admin_id, cid, mid):
         mk.keyboard.insert(0, [_copy_btn(f" Copy Code: {st['code']}", st["code"])])
     done = (f"✅ <b>Code created!</b>\n<blockquote>🎟 <code>{st['code']}</code>\n💰 {st['credits']} credits · "
             f"👥 {st['max']} users\n\nUsers redeem with: <code>/redeem {st['code']}</code></blockquote>\n"
-            f"📌 <i>Tap the code or the Copy button to copy it.</i>\n"
-            f"🌸 Thankyou @{bot.get_me().username}\n\n") if ok else f"❌ {m}\n\n"
-    edit_with_premium(cid, mid, done + t, reply_markup=mk)
+            f"📌 <i>Tap the code or the Copy button to copy it.</i>\n\n") if ok else f"❌ {m}\n\n"
+    if not ok:
+        edit_with_premium(cid, mid, done + t, reply_markup=mk)
+        return
+    # premium emoji everywhere except the last line: plain 🌸 + bold thank-you
+    body = replace_with_premium_emojis(_sanitise_html(done + t))
+    body += f"\n\n🌸 <b>Thankyou @{bot.get_me().username}</b>"
+    try:
+        bot.edit_message_text(body, cid, mid, parse_mode="HTML", reply_markup=mk)
+    except Exception as e:
+        if "not modified" not in str(e).lower():
+            edit_with_premium(cid, mid, done + t + f"\n\n🌸 <b>Thankyou @{bot.get_me().username}</b>", reply_markup=mk)
 
 
 def admin_main_text():
