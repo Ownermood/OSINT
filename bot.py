@@ -7404,7 +7404,8 @@ def finish_redeem_code(st, admin_id, cid, mid):
         mk.keyboard.insert(0, [_copy_btn(f" Copy Code: {st['code']}", st["code"])])
     done = (f"✅ <b>Code created!</b>\n<blockquote>🎟 <code>{st['code']}</code>\n💰 {st['credits']} credits · "
             f"👥 {st['max']} users\n\nUsers redeem with: <code>/redeem {st['code']}</code></blockquote>\n"
-            f"📌 <i>Tap the code or the Copy button to copy it.</i>\n\n") if ok else f"❌ {m}\n\n"
+            f"📌 <i>Tap the code or the Copy button to copy it.</i>\n"
+            f"🌸 Thank you ➜ @{bot.get_me().username}\n\n") if ok else f"❌ {m}\n\n"
     edit_with_premium(cid, mid, done + t, reply_markup=mk)
 
 
