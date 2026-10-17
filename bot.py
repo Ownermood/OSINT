@@ -8874,8 +8874,12 @@ def help_page_cb(call):
     try: bot.answer_callback_query(call.id)
     except Exception: pass
     chat_id, mid = call.message.chat.id, call.message.message_id
+    # keep the /start menu "Back" row when help was opened from the menu
+    start_rows = [r for r in (getattr(call.message.reply_markup, "keyboard", None) or [])
+                  if any(getattr(b, "callback_data", None) == "back_start" for b in r)]
     if call.data == "help_close":
         msg, markup = _help_page1(call.from_user.id)
+        markup.keyboard += start_rows
         try: edit_with_premium(chat_id, mid, msg, reply_markup=markup)
         except Exception as e: print(f"Error in help page 1: {e}")
         return
@@ -8903,6 +8907,7 @@ def help_page_cb(call):
     )
     markup = InlineKeyboardMarkup()
     markup.add(_make_btn(" ʙᴀᴄᴋ", callback_data="help_close", icon_custom_emoji_id="6048770006810893912"))
+    markup.keyboard += start_rows
     try: edit_with_premium(chat_id, mid, msg, reply_markup=markup)
     except Exception as e: print(f"Error in help page 2: {e}")
 
