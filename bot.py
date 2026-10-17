@@ -5953,23 +5953,6 @@ def start_cmd(message):
         f"{_s(CAR,'🚘')} /vechrc <code>HR26EV0001</code> - RC info\n"
         f"{_s(FLAG,'🇮🇳')} /upi <code>id@bank</code> - UPI ID info\n"
         f"{_s(ATM,'🏧')} /ifsc <code>SBIN0001234</code> - Bank info\n"
-        f"{_s(ROCKET,'🚀')} /email <code>example@gmail.com</code> - Email info\n"
-        f"{_s(CARD1,'💳')} /leakdetails <code>9876543210</code> - Leak details\n"
-        f"{_s(CARD1,'💳')} /leakosint <code>9876543210</code> - Leak OSINT\n"
-        f"{_s(ATM,'🏧')} /gst <code>27AAPFU0939F1ZV</code> - GST info\n"
-        f"{_s(ATM,'🏧')} /gstfull <code>27AAPFU0939F1ZV</code> - GST full info\n"
-        f"{_s(CARD2,'💳')} /dl <code>DL0420110012345</code> - Driving licence\n"
-        f"{_s(CARD2,'💳')} /dladvance <code>DL0420110012345</code> - DL advance\n"
-        f"{_s(CARD2,'💳')} /dlwithoutdob <code>DL0420110012345</code> - DL without DOB\n"
-        f"{_s(CAR,'🚘')} /challan <code>HR26DA1337</code> - Challan info\n"
-        f"{_s(CAR,'🚘')} /rto <code>HR26DA1337</code> - RTO info\n"
-        f"{_s(STAR3,'🤩')} /chassis <code>MA3EWDE1S00123456</code> - Chassis info\n"
-        f"{_s(STAR3,'🤩')} /chassisfull <code>MA3EWDE1S00123456</code> - Chassis full info\n"
-        f"{_s(STAR3,'🤩')} /engine <code>K12MN1234567</code> - Engine info\n"
-        f"{_s(STAR3,'🤩')} /enginefull <code>K12MN1234567</code> - Engine full info\n"
-        f"{_s(FLAG,'🇮🇳')} /verifyvpa <code>id@bank</code> - Verify VPA\n"
-        f"{_s(CARD1,'💳')} /passport <code>J8369854</code> - Passport info\n"
-        f"{_s(PIN,'📍')} /imei <code>356938035643809</code> - IMEI info\n"
         f"{_s(ROCKET,'🚀')} /ip <code>8.8.8.8</code> - IP info\n"
         f"{_s(PIN,'📍')} /pin <code>110001</code> - Pincode info\n"
         f"{_s(LAPTOP,'💻')} /git <code>username</code> - GitHub info\n"
@@ -6010,6 +5993,7 @@ def start_cmd(message):
                                                  icon_custom_emoji_id="6019328362479097179"))
     else:
         markup.row(_refer)
+    markup.row(create_primary_button(" Next ▶️ More Commands", callback_data="help_p2"))
     # row 4: plans + add to group (green)
     markup.row(create_success_button(" Premium Plans", callback_data="buyplans", icon_custom_emoji_id="6048770006810893912"),
                create_success_button(" Add To Group", url=f"https://t.me/{bot_username}?startgroup=start",
@@ -6112,23 +6096,6 @@ def help_cmd(message):
         f"{_h(H_CAR,'🚘')} /vechrc <code>HR26EV0001</code> - RC info\n"
         f"{_h(H_FLAG,'🇮🇳')} /upi <code>id@bank</code> - UPI ID info\n"
         f"{_h(H_ATM,'🏧')} /ifsc <code>SBIN0001234</code> - Bank info\n"
-        f"{_h(H_ROCKET,'🚀')} /email <code>example@gmail.com</code> - Email info\n"
-        f"{_h(H_CARD1,'💳')} /leakdetails <code>9876543210</code> - Leak details\n"
-        f"{_h(H_CARD1,'💳')} /leakosint <code>9876543210</code> - Leak OSINT\n"
-        f"{_h(H_ATM,'🏧')} /gst <code>27AAPFU0939F1ZV</code> - GST info\n"
-        f"{_h(H_ATM,'🏧')} /gstfull <code>27AAPFU0939F1ZV</code> - GST full info\n"
-        f"{_h(H_CARD2,'💳')} /dl <code>DL0420110012345</code> - Driving licence\n"
-        f"{_h(H_CARD2,'💳')} /dladvance <code>DL0420110012345</code> - DL advance\n"
-        f"{_h(H_CARD2,'💳')} /dlwithoutdob <code>DL0420110012345</code> - DL without DOB\n"
-        f"{_h(H_CAR,'🚘')} /challan <code>HR26DA1337</code> - Challan info\n"
-        f"{_h(H_CAR,'🚘')} /rto <code>HR26DA1337</code> - RTO info\n"
-        f"{_h(H_STAR3,'🤩')} /chassis <code>MA3EWDE1S00123456</code> - Chassis info\n"
-        f"{_h(H_STAR3,'🤩')} /chassisfull <code>MA3EWDE1S00123456</code> - Chassis full info\n"
-        f"{_h(H_STAR3,'🤩')} /engine <code>K12MN1234567</code> - Engine info\n"
-        f"{_h(H_STAR3,'🤩')} /enginefull <code>K12MN1234567</code> - Engine full info\n"
-        f"{_h(H_FLAG,'🇮🇳')} /verifyvpa <code>id@bank</code> - Verify VPA\n"
-        f"{_h(H_CARD1,'💳')} /passport <code>J8369854</code> - Passport info\n"
-        f"{_h(H_PIN,'📍')} /imei <code>356938035643809</code> - IMEI info\n"
         f"{_h(H_ROCKET,'🚀')} /ip <code>8.8.8.8</code> - IP info\n"
         f"{_h(H_PIN,'📍')} /pin <code>110001</code> - Pincode info\n"
         f"{_h(H_LAPTOP,'💻')} /git <code>username</code> - GitHub info\n"
@@ -6150,6 +6117,7 @@ def help_cmd(message):
     markup = InlineKeyboardMarkup()
     markup.add(create_success_button(" Add Bot To Group", url=f"https://t.me/{bot_username}?startgroup=start",
                                      icon_custom_emoji_id="6136525109315245846"))
+    markup.add(create_primary_button(" Next ▶️ More Commands", callback_data="help_p2"))
 
     try:
         sent = send_with_premium(chat_id, msg, parse_mode='HTML', reply_markup=markup)
@@ -8897,6 +8865,44 @@ def set_mode_cmd(message):
         return
     success, result = set_media_mode(parts[1].strip().lower(), message.from_user.id)
     send_with_premium(message.chat.id, result)
+
+@bot.callback_query_handler(func=lambda call: call.data in ("help_p2", "help_close"))
+def help_page_cb(call):
+    try: bot.answer_callback_query(call.id)
+    except Exception: pass
+    if call.data == "help_close":
+        try: bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception: pass
+        return
+    msg = (
+        f"<blockquote>"
+        f"{te('6048770006810893912','💎')} <b>MORE OSINT COMMANDS (Page 2):</b>\n\n"
+        f"{te('6019205852831947754','🚀')} /email <code>example@gmail.com</code> - Email info\n"
+        f"{te('6019492172531767926','💳')} /leakdetails <code>9876543210</code> - Leak details\n"
+        f"{te('6019492172531767926','💳')} /leakosint <code>9876543210</code> - Leak OSINT\n"
+        f"{te('6021524310538065865','🏧')} /gst <code>27AAPFU0939F1ZV</code> - GST info\n"
+        f"{te('6021524310538065865','🏧')} /gstfull <code>27AAPFU0939F1ZV</code> - GST full info\n"
+        f"{te('6019457765548760426','💳')} /dl <code>DL0420110012345</code> - Driving licence\n"
+        f"{te('6019457765548760426','💳')} /dladvance <code>DL0420110012345</code> - DL advance\n"
+        f"{te('6019457765548760426','💳')} /dlwithoutdob <code>DL0420110012345</code> - DL without DOB\n"
+        f"{te('6019540018467444613','🚘')} /challan <code>HR26DA1337</code> - Challan info\n"
+        f"{te('6019540018467444613','🚘')} /rto <code>HR26DA1337</code> - RTO info\n"
+        f"{te('6019490411595177071','🤩')} /chassis <code>MA3EWDE1S00123456</code> - Chassis info\n"
+        f"{te('6019490411595177071','🤩')} /chassisfull <code>MA3EWDE1S00123456</code> - Chassis full info\n"
+        f"{te('6019490411595177071','🤩')} /engine <code>K12MN1234567</code> - Engine info\n"
+        f"{te('6019490411595177071','🤩')} /enginefull <code>K12MN1234567</code> - Engine full info\n"
+        f"{te('6021567079822399869','🇮🇳')} /verifyvpa <code>id@bank</code> - Verify VPA\n"
+        f"{te('6019492172531767926','💳')} /passport <code>J8369854</code> - Passport info\n"
+        f"{te('6023989024765516223','📍')} /imei <code>356938035643809</code> - IMEI info\n"
+        f"</blockquote>"
+    )
+    markup = InlineKeyboardMarkup()
+    markup.add(create_primary_button(" ◀️ Back", callback_data="help_close"))
+    try:
+        sent = send_with_premium(call.message.chat.id, msg, parse_mode='HTML', reply_markup=markup)
+        schedule_deletion(sent.message_id, call.message.chat.id)
+    except Exception as e:
+        print(f"Error in help page 2: {e}")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("vech_page_"))
 def vech_page_callback(call):
