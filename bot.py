@@ -8902,7 +8902,7 @@ def help_page_cb(call):
         f"</blockquote>"
     )
     markup = InlineKeyboardMarkup()
-    markup.add(_make_btn(" ⏪ ʙᴀᴄᴋ", callback_data="help_close", icon_custom_emoji_id="6048770006810893912"))
+    markup.add(_make_btn(" ʙᴀᴄᴋ", callback_data="help_close", icon_custom_emoji_id="6048770006810893912"))
     try: edit_with_premium(chat_id, mid, msg, reply_markup=markup)
     except Exception as e: print(f"Error in help page 2: {e}")
 
