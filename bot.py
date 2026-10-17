@@ -1428,15 +1428,26 @@ def quota_display(message):
     uid = message.from_user.id
     if is_admin(uid):
         return "♾ Unlimited"
-    in_group = message.chat.type in ("group", "supergroup")
-    limit = FREE_SEARCH_GROUP if in_group else FREE_SEARCH_PM
-    where = "Group" if in_group else "PM"
-    fl = free_left(uid, in_group)
-    cr = get_credits(uid)
-    if fl > 0:
-        left = f"{fl - 1}/{limit} free today ({where})"
-        return left + (f" · {cr} credits" if cr else "")
-    return f"{max(cr - 1, 0)} credits"
+    return _QuotaText(uid, message.chat.type in ("group", "supergroup"))
+
+
+class _QuotaText:
+    """Read when the result is built (after the search): shows what is really left,
+    so a search with no result still shows 5/5."""
+    def __init__(self, uid, in_group):
+        self.uid, self.in_group = uid, in_group
+
+    def __str__(self):
+        limit = FREE_SEARCH_GROUP if self.in_group else FREE_SEARCH_PM
+        where = "Group" if self.in_group else "PM"
+        fl = free_left(self.uid, self.in_group)
+        cr = get_credits(self.uid)
+        if fl > 0:
+            return f"{fl}/{limit} free today ({where})" + (f" · {cr} credits" if cr else "")
+        return f"{cr} credits"
+
+    def __format__(self, spec):
+        return format(str(self), spec)
 
 
 def credits_display(user_id):
