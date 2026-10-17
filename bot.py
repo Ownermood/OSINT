@@ -5993,7 +5993,6 @@ def start_cmd(message):
                                                  icon_custom_emoji_id="6019328362479097179"))
     else:
         markup.row(_refer)
-    markup.row(_make_btn(" ɴᴇxᴛ ᴩᴀɢᴇ ⏩ ᴍᴏʀᴇ ᴄᴏᴍᴍᴀɴᴅꜱ", callback_data="help_p2", icon_custom_emoji_id="6019205852831947754"))
     # row 4: plans + add to group (green)
     markup.row(create_success_button(" Premium Plans", callback_data="buyplans", icon_custom_emoji_id="6048770006810893912"),
                create_success_button(" Add To Group", url=f"https://t.me/{bot_username}?startgroup=start",
@@ -6115,7 +6114,7 @@ def help_cmd(message):
     )
 
     markup = InlineKeyboardMarkup()
-    markup.add(_make_btn(" ɴᴇxᴛ ᴩᴀɢᴇ ⏩ ᴍᴏʀᴇ ᴄᴏᴍᴍᴀɴᴅꜱ", callback_data="help_p2",
+    markup.add(_make_btn(" ɴᴇxᴛ ᴩᴀɢᴇ", callback_data="help_p2",
                          icon_custom_emoji_id="6019205852831947754"))
 
     try:
