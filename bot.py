@@ -927,6 +927,23 @@ API_ENDPOINTS = {
     # set these from Admin → API → API Manager (they use the placeholder until then)
     "insta": "PASTE_API_HERE/api/insta?username={query}",
     "snap": "PASTE_API_HERE/api/snap?username={query}",
+    "email": "PASTE_API_HERE/api/email?key={key}&email={query}",
+    "leakdetails": "PASTE_API_HERE/api/leakdetails?key={key}&query={query}",
+    "leakosint": "PASTE_API_HERE/api/leakosint?key={key}&query={query}",
+    "gst": "PASTE_API_HERE/api/gst?key={key}&gst={query}",
+    "gstfull": "PASTE_API_HERE/api/gstfull?key={key}&gst={query}",
+    "dl": "PASTE_API_HERE/api/dl?key={key}&dl={query}",
+    "dladvance": "PASTE_API_HERE/api/dladvance?key={key}&dl={query}",
+    "dlwithoutdob": "PASTE_API_HERE/api/dlwithoutdob?key={key}&dl={query}",
+    "challan": "PASTE_API_HERE/api/challan?key={key}&vehicle={query}",
+    "rto": "PASTE_API_HERE/api/rto?key={key}&vehicle={query}",
+    "chassis": "PASTE_API_HERE/api/chassis?key={key}&chassis={query}",
+    "chassisfull": "PASTE_API_HERE/api/chassisfull?key={key}&chassis={query}",
+    "engine": "PASTE_API_HERE/api/engine?key={key}&engine={query}",
+    "enginefull": "PASTE_API_HERE/api/enginefull?key={key}&engine={query}",
+    "verifyvpa": "PASTE_API_HERE/api/verifyvpa?key={key}&vpa={query}",
+    "passport": "PASTE_API_HERE/api/passport?key={key}&passport={query}",
+    "imei": "PASTE_API_HERE/api/imei?key={key}&imei={query}",
 }
 
 NEW_USER_CREDITS = 0  # new users get free searches instead (FREE_SEARCH_PM / FREE_SEARCH_GROUP)
@@ -1024,6 +1041,23 @@ API_STATUS = {
     "family": {"working": True, "message": None},
     "leak": {"working": True, "message": None},
     "snap": {"working": True, "message": None},
+    "email": {"working": True, "message": None},
+    "leakdetails": {"working": True, "message": None},
+    "leakosint": {"working": True, "message": None},
+    "gst": {"working": True, "message": None},
+    "gstfull": {"working": True, "message": None},
+    "dl": {"working": True, "message": None},
+    "dladvance": {"working": True, "message": None},
+    "dlwithoutdob": {"working": True, "message": None},
+    "challan": {"working": True, "message": None},
+    "rto": {"working": True, "message": None},
+    "chassis": {"working": True, "message": None},
+    "chassisfull": {"working": True, "message": None},
+    "engine": {"working": True, "message": None},
+    "enginefull": {"working": True, "message": None},
+    "verifyvpa": {"working": True, "message": None},
+    "passport": {"working": True, "message": None},
+    "imei": {"working": True, "message": None},
 }
 
 def check_api_status(command):
@@ -1524,7 +1558,8 @@ _API_FN_CMD = {"call_phone_api": "num", "call_tg_api": "tgid", "call_aadhar_api"
                "call_upi_api": "upi", "call_insta_api": "insta", "call_snap_api": "snap",
                "call_vehicle_api": "vech", "call_leak_api": "leak", "call_name_api": "name",
                "call_pan_api": "pan", "call_ip_api": "ip", "call_pincode_api": "pin",
-               "call_git_api": "git", "call_bgmi_api": "bgmi", "call_ff_api": "ff", "call_ifsc_api": "ifsc"}
+               "call_git_api": "git", "call_bgmi_api": "bgmi", "call_ff_api": "ff", "call_ifsc_api": "ifsc",
+               "call_email_api": "email", "call_leakdetails_api": "leakdetails", "call_leakosint_api": "leakosint", "call_gst_api": "gst", "call_gstfull_api": "gstfull", "call_dl_api": "dl", "call_dladvance_api": "dladvance", "call_dlwithoutdob_api": "dlwithoutdob", "call_challan_api": "challan", "call_rto_api": "rto", "call_chassis_api": "chassis", "call_chassisfull_api": "chassisfull", "call_engine_api": "engine", "call_enginefull_api": "enginefull", "call_verifyvpa_api": "verifyvpa", "call_passport_api": "passport", "call_imei_api": "imei"}
 
 
 _col_protected = _db["protected_numbers"]
@@ -6582,6 +6617,59 @@ def upi_cmd(message):
 @bot.message_handler(commands=['ifsc'])
 def ifsc_cmd(message):
     handle_api_command(message, 'ifsc', call_ifsc_api, validate_ifsc, "🏦 BANK INFO", lambda x: x.upper())
+
+# ── extra lookup commands (endpoint set from Admin → API → API Manager) ──
+_EXTRA_CMDS = {
+    "email": ("📧 EMAIL INFO", False),
+    "leakdetails": ("🔓 LEAK DETAILS", False),
+    "leakosint": ("🕵️ LEAK OSINT", False),
+    "gst": ("🧾 GST INFO", True),
+    "gstfull": ("🧾 GST FULL INFO", True),
+    "dl": ("🪪 DRIVING LICENCE", True),
+    "dladvance": ("🪪 DL ADVANCE", True),
+    "dlwithoutdob": ("🪪 DL WITHOUT DOB", True),
+    "challan": ("🚨 CHALLAN INFO", True),
+    "rto": ("🏢 RTO INFO", True),
+    "chassis": ("🔩 CHASSIS INFO", True),
+    "chassisfull": ("🔩 CHASSIS FULL INFO", True),
+    "engine": ("⚙️ ENGINE INFO", True),
+    "enginefull": ("⚙️ ENGINE FULL INFO", True),
+    "verifyvpa": ("✅ VPA VERIFY", False),
+    "passport": ("🛂 PASSPORT INFO", True),
+    "imei": ("📱 IMEI INFO", False),
+}
+
+def _make_extra_api(cmd):
+    def _fn(query):
+        try:
+            ep = get_api_endpoint(cmd) or API_ENDPOINTS.get(cmd)
+            if not ep or "PASTE_API_HERE" in ep:
+                return {"status": "error", "message": "API NOT CONFIGURED"}
+            if not ep.startswith("http"):
+                ep = API_BASE_URL + ep
+            data = make_api_request(build_api_url(ep, query), timeout=15)
+            if isinstance(data, dict):
+                data.pop('channel', None)
+                if is_empty_response(data):
+                    return {"status": "error", "message": "NO DATA FOUND"}
+                return clean_dict(data)
+            if isinstance(data, list) and data:
+                return {"results": data}
+            return {"status": "error", "message": "NO DATA FOUND"}
+        except Exception:
+            return {"status": "error", "message": "NO DATA FOUND"}
+    _fn.__name__ = f"call_{cmd}_api"
+    return _fn
+
+for _c in _EXTRA_CMDS:
+    globals()[f"call_{_c}_api"] = _make_extra_api(_c)
+
+@bot.message_handler(commands=list(_EXTRA_CMDS))
+def extra_lookup_cmd(message):
+    cmd = message.text.split()[0][1:].split('@')[0].lower()
+    title, upper = _EXTRA_CMDS[cmd]
+    handle_api_command(message, cmd, globals()[f"call_{cmd}_api"], None, title,
+                       (lambda x: x.upper().replace(' ', '')) if upper else None)
 
 @bot.message_handler(commands=['family'])
 def family_cmd(message):
