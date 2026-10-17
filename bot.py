@@ -5993,7 +5993,7 @@ def start_cmd(message):
                                                  icon_custom_emoji_id="6019328362479097179"))
     else:
         markup.row(_refer)
-    markup.row(create_primary_button(" Next ▶️ More Commands", callback_data="help_p2"))
+    markup.row(_make_btn(" ɴᴇxᴛ ᴩᴀɢᴇ ⏩ ᴍᴏʀᴇ ᴄᴏᴍᴍᴀɴᴅꜱ", callback_data="help_p2", icon_custom_emoji_id="6019205852831947754"))
     # row 4: plans + add to group (green)
     markup.row(create_success_button(" Premium Plans", callback_data="buyplans", icon_custom_emoji_id="6048770006810893912"),
                create_success_button(" Add To Group", url=f"https://t.me/{bot_username}?startgroup=start",
@@ -6115,9 +6115,8 @@ def help_cmd(message):
     )
 
     markup = InlineKeyboardMarkup()
-    markup.add(create_success_button(" Add Bot To Group", url=f"https://t.me/{bot_username}?startgroup=start",
-                                     icon_custom_emoji_id="6136525109315245846"))
-    markup.add(create_primary_button(" Next ▶️ More Commands", callback_data="help_p2"))
+    markup.add(_make_btn(" ɴᴇxᴛ ᴩᴀɢᴇ ⏩ ᴍᴏʀᴇ ᴄᴏᴍᴍᴀɴᴅꜱ", callback_data="help_p2",
+                         icon_custom_emoji_id="6019205852831947754"))
 
     try:
         sent = send_with_premium(chat_id, msg, parse_mode='HTML', reply_markup=markup)
@@ -8897,7 +8896,7 @@ def help_page_cb(call):
         f"</blockquote>"
     )
     markup = InlineKeyboardMarkup()
-    markup.add(create_primary_button(" ◀️ Back", callback_data="help_close"))
+    markup.add(_make_btn(" ⏪ ʙᴀᴄᴋ", callback_data="help_close", icon_custom_emoji_id="6048770006810893912"))
     try:
         sent = send_with_premium(call.message.chat.id, msg, parse_mode='HTML', reply_markup=markup)
         schedule_deletion(sent.message_id, call.message.chat.id)
