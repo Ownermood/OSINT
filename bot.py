@@ -314,8 +314,13 @@ def is_real_emoji(em):
     return c in _BMP_EMOJI
 
 
+INFINITY_EMOJI_ID = ""   # ← premium ♾ emoji ID (empty = plain ♾, never a random emoji)
+
+
 def premium_id_for(emoji_text):
     key = emoji_text.replace("\ufe0f", "")
+    if key == "♾":
+        return INFINITY_EMOJI_ID or None
     return _EM.get(key) or _EM.get(key[:1])
 
 
@@ -589,7 +594,10 @@ def replace_with_premium_emojis(text):
             if not is_real_emoji(em):
                 out.append(em)       # symbols like ⏤ in user names: leave as plain text
                 continue
-            eid = premium_id_for(em) or get_random_premium_emoji_id()
+            eid = premium_id_for(em) or (None if em.startswith("♾") else get_random_premium_emoji_id())
+            if not eid:
+                out.append(em)
+                continue
             out.append('<tg-emoji emoji-id="' + eid + '">' + em + '</tg-emoji>')
         return "".join(out)
 
@@ -1427,7 +1435,7 @@ def quota_display(message):
     Counts this search as used (it is charged only when a result comes back)."""
     uid = message.from_user.id
     if is_admin(uid):
-        return "♾ Unlimited"
+        return "♾"
     return _QuotaText(uid, message.chat.type in ("group", "supergroup"))
 
 
@@ -1452,12 +1460,12 @@ class _QuotaText:
 
 def credits_display(user_id):
     """What to show as credits: admins/owner have unlimited."""
-    return "♾ Unlimited" if is_admin(user_id) else get_credits(user_id)
+    return "♾" if is_admin(user_id) else get_credits(user_id)
 
 
 def free_display(user_id):
     if is_admin(user_id):
-        return "♾ Unlimited (Owner)" if user_id == ADMIN_ID else "♾ Unlimited (Admin)"
+        return "♾ (Owner)" if user_id == ADMIN_ID else "♾ (Admin)"
     return (f"{free_left(user_id, False)}/{FREE_SEARCH_PM} (PM) · "
             f"{free_left(user_id, True)}/{FREE_SEARCH_GROUP} (Group)")
 
