@@ -6030,6 +6030,15 @@ def help_cmd(message):
     if not enforce_force_join(message):
         return
 
+    msg, markup = _help_page1(user_id)
+
+    try:
+        sent = send_with_premium(chat_id, msg, parse_mode='HTML', reply_markup=markup)
+        schedule_deletion(sent.message_id, chat_id)
+    except Exception as e:
+        print(f"Error in help command: {e}")
+
+def _help_page1(user_id):
     credits = get_credits(user_id)
     bot_username = bot.get_me().username
 
@@ -6117,11 +6126,7 @@ def help_cmd(message):
     markup.add(_make_btn(" ɴᴇxᴛ ᴩᴀɢᴇ", callback_data="help_p2",
                          icon_custom_emoji_id="6019205852831947754"))
 
-    try:
-        sent = send_with_premium(chat_id, msg, parse_mode='HTML', reply_markup=markup)
-        schedule_deletion(sent.message_id, chat_id)
-    except Exception as e:
-        print(f"Error in help command: {e}")
+    return msg, markup
 
 @bot.message_handler(commands=['profile'])
 def profile_cmd(message):
@@ -8868,9 +8873,11 @@ def set_mode_cmd(message):
 def help_page_cb(call):
     try: bot.answer_callback_query(call.id)
     except Exception: pass
+    chat_id, mid = call.message.chat.id, call.message.message_id
     if call.data == "help_close":
-        try: bot.delete_message(call.message.chat.id, call.message.message_id)
-        except Exception: pass
+        msg, markup = _help_page1(call.from_user.id)
+        try: edit_with_premium(chat_id, mid, msg, reply_markup=markup)
+        except Exception as e: print(f"Error in help page 1: {e}")
         return
     msg = (
         f"<blockquote>"
@@ -8896,11 +8903,8 @@ def help_page_cb(call):
     )
     markup = InlineKeyboardMarkup()
     markup.add(_make_btn(" ⏪ ʙᴀᴄᴋ", callback_data="help_close", icon_custom_emoji_id="6048770006810893912"))
-    try:
-        sent = send_with_premium(call.message.chat.id, msg, parse_mode='HTML', reply_markup=markup)
-        schedule_deletion(sent.message_id, call.message.chat.id)
-    except Exception as e:
-        print(f"Error in help page 2: {e}")
+    try: edit_with_premium(chat_id, mid, msg, reply_markup=markup)
+    except Exception as e: print(f"Error in help page 2: {e}")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("vech_page_"))
 def vech_page_callback(call):
