@@ -1446,7 +1446,7 @@ def credits_display(user_id):
 
 def free_display(user_id):
     if is_admin(user_id):
-        return "♾ Unlimited (Admin)"
+        return "♾ Unlimited (Owner)" if user_id == ADMIN_ID else "♾ Unlimited (Admin)"
     return (f"{free_left(user_id, False)}/{FREE_SEARCH_PM} (PM) · "
             f"{free_left(user_id, True)}/{FREE_SEARCH_GROUP} (Group)")
 
@@ -1565,6 +1565,7 @@ def _hits_protected(obj):
 
 
 PROTECTED_MSG = "🔒 This data is protected and cannot be shown."
+NO_DATA_MSG = "Data Not Found — no record is available for this search. No credit was used."
 
 
 def _api_ok(res):
@@ -1614,6 +1615,12 @@ def _charge_on_success(fn):
             _CHARGE_TL.pending = None
             return {"status": "error", "message": PROTECTED_MSG}
         res = _run_dbs(fn, a, kw)
+        if isinstance(res, dict) and not _api_ok(res):
+            m = str(res.get("message") or "")
+            if m != PROTECTED_MSG and not m.startswith("API not set"):
+                if m:
+                    print(f"[search:{_CHARGE_TL.cmd}] {m[:150]}")
+                res = {**res, "message": NO_DATA_MSG}
         if not owner and _hits_protected(res):
             _CHARGE_TL.pending = None
             return {"status": "error", "message": PROTECTED_MSG}
@@ -6091,7 +6098,7 @@ def profile_cmd(message):
 🎁 Free Today: {free_display(user_id)}
 👥 Referrals: {user_data.get('referral_count') or 0}
 ⚡ Commands Used: {user_data.get('total_commands') or 0}
-👑 Admin: {'✅' if user_data.get('is_admin') == 1 or user_id == ADMIN_ID else '❌'}
+👑 Role: {'Owner' if user_id == ADMIN_ID else ('Admin' if user_data.get('is_admin') == 1 else 'User')}
 📅 Joined: {str(user_data.get('join_date'))[:10] if user_data.get('join_date') else 'N/A'}
 """
     try:
@@ -7512,7 +7519,7 @@ def admin_menu_markup(cat=None):
 _col_broadcasts = _db["broadcasts"]
 
 
-def save_broadcast(sent, replace_last=False):
+def save_broadcast(sent, replace_last=False, meta=None):
     """Remember who got which message, so the broadcast can be deleted later. Returns its id."""
     pairs = [[c, m] for c, m in sent if m]
     try:
@@ -7521,7 +7528,9 @@ def save_broadcast(sent, replace_last=False):
             if last and not last.get("deleted"):
                 _col_broadcasts.update_one({"_id": last["_id"]}, {"$set": {"sent": pairs}})
                 return str(last["_id"])
-        return str(_col_broadcasts.insert_one({"ts": time.time(), "sent": pairs, "deleted": False}).inserted_id)
+        doc = {"ts": time.time(), "sent": pairs, "deleted": False}
+        doc.update(meta or {})
+        return str(_col_broadcasts.insert_one(doc).inserted_id)
     except Exception as e:
         print(f"save_broadcast error: {e}")
         return None
@@ -7575,6 +7584,16 @@ def delete_broadcast(admin_chat_id, bc_id=None, edit_msg_id=None):
         pass
 
 
+def find_broadcast_by_msg(chat_id, msg_id):
+    """Which saved broadcast does this message belong to? (any recipient copy, or the admin's original)"""
+    try:
+        return _col_broadcasts.find_one({"$or": [{"sent": [chat_id, msg_id]},
+                                                 {"src_chat": chat_id, "src_mid": msg_id}]}, sort=[("ts", -1)])
+    except Exception as e:
+        print(f"find_broadcast_by_msg: {e}")
+        return None
+
+
 def delete_last_broadcast(admin_chat_id):
     delete_broadcast(admin_chat_id)
 
@@ -7623,7 +7642,7 @@ def broadcast_copy(admin_chat_id, src, markup=None):
         state["i"] += 1
         time.sleep(0.05)
     state["done"] = True
-    bc_id = save_broadcast(sent)
+    bc_id = save_broadcast(sent, meta={"src_chat": src.chat.id, "src_mid": src.message_id})
     time.sleep(1.3)
     mk = InlineKeyboardMarkup(row_width=1)
     if bc_id and sent:
@@ -7657,10 +7676,40 @@ def admin_cmd(message):
     if not is_admin(user_id):
         send_with_premium(message.chat.id, "❌ Admin only!")
         return
-    if message.chat.type != "private":
-        send_with_premium(message.chat.id, "⚙️ The admin panel only opens in the bot's private chat.")
-        return
     admin_panel(message)
+
+@bot.message_handler(commands=['delbc'])
+def delbc_cmd(message):
+    if not is_admin(message.from_user.id):
+        return
+    r = message.reply_to_message
+    if not r:
+        send_with_premium(message.chat.id,
+            "<blockquote>🗑 <b>Delete a broadcast</b>\n\nReply to any broadcast message with /delbc "
+            "to delete that broadcast from every chat.\n\nOr: Admin Panel → Broadcast → Delete Last Broadcast.</blockquote>")
+        return
+    doc = find_broadcast_by_msg(message.chat.id, r.message_id)
+    if not doc:
+        send_with_premium(message.chat.id, "<blockquote>❌ This message is not a saved broadcast.\n"
+                                           "Reply to a broadcast message the bot sent.</blockquote>")
+        return
+    if doc.get("deleted"):
+        send_with_premium(message.chat.id, "<blockquote>ℹ️ This broadcast was already deleted.</blockquote>")
+        return
+    age_h = (time.time() - doc.get("ts", 0)) / 3600
+    when = datetime.fromtimestamp(doc.get("ts", 0)).strftime("%d %b %H:%M")
+    warn = ("⚠️ Older than 48 hours — Telegram will refuse most deletions." if age_h >= 48
+            else f"⏳ About {int(48 - age_h)}h left before Telegram stops allowing deletion.")
+    mk = InlineKeyboardMarkup(row_width=2)
+    mk.add(create_danger_button(" Confirm Delete", callback_data=f"admin_delbcid_{doc['_id']}",
+                                icon_custom_emoji_id="6021413766669801212"),
+           create_primary_button(" Cancel", callback_data="admin_delbc_cancel",
+                                 icon_custom_emoji_id="6138930810692049889"))
+    send_with_premium(message.chat.id,
+        f"<blockquote>🗑 <b>Delete this broadcast?</b>\n\n📅 Sent: <b>{when}</b>\n"
+        f"📨 Delivered to: <b>{len(doc.get('sent', []))}</b> chats\n\n{warn}</blockquote>",
+        reply_markup=mk, reply_to_message_id=r.message_id)
+
 
 @bot.message_handler(commands=['stats'])
 def stats_cmd(message):
@@ -8460,6 +8509,7 @@ def _api_map():
     return out
 
 
+MAX_DBS = 6   # databases per command (DB-1 … DB-6)
 _API_ICON = {"on": "6019175208240289774", "off": "6019102674832595118", "unset": "6030591832608479858"}
 
 
@@ -8546,8 +8596,9 @@ def api_detail_view(cmd):
                 f" DB-{i} : {'ON' if d['on'] else 'OFF'} (Manage)", callback_data=f"admin_apidb_m_{i}_{cmd}",
                 icon_custom_emoji_id=_API_ICON["on" if d["on"] else "unset"])
             for i, d in enumerate(dbs, 1)]
-    btns.append(create_primary_button(f" Add DB-{len(dbs) + 1}", callback_data=f"admin_apidb_a_0_{cmd}",
-                                      icon_custom_emoji_id=_API_ICON["unset"]))
+    if len(dbs) < MAX_DBS:
+        btns.append(create_primary_button(f" Add DB-{len(dbs) + 1}", callback_data=f"admin_apidb_a_0_{cmd}",
+                                          icon_custom_emoji_id=_API_ICON["unset"]))
     mk.add(*btns)
     mk.row((create_success_button if working else create_danger_button)(
         f" /{cmd} Command : {'ON' if working else 'OFF'}  (tap to turn {'OFF' if working else 'ON'})",
@@ -9524,6 +9575,15 @@ def callback_handler(call):
                              daemon=True).start()
             return
 
+        if call.data == "admin_delbc_cancel":
+            bot.answer_callback_query(call.id, "Cancelled")
+            try:
+                edit_with_premium(call.message.chat.id, call.message.message_id,
+                                  "<blockquote>❎ Broadcast deletion cancelled.</blockquote>")
+            except Exception:
+                pass
+            return
+
         if call.data == "admin_delbc_yes":
             bot.answer_callback_query(call.id, "Deleting...")
             threading.Thread(target=delete_last_broadcast, args=(call.message.chat.id,), daemon=True).start()
@@ -9627,6 +9687,9 @@ def callback_handler(call):
                 save_api_dbs(c, dbs, call.from_user.id)
                 bot.answer_callback_query(call.id, f"DB-{idx} removed")
             else:   # add / edit → ask for the URL
+                if op == "a" and len(dbs) >= MAX_DBS:
+                    bot.answer_callback_query(call.id, f"Max {MAX_DBS} databases per command.", True)
+                    return
                 bot.answer_callback_query(call.id)
                 n = idx if op == "e" else len(dbs) + 1
                 back = InlineKeyboardMarkup()
@@ -9650,7 +9713,7 @@ def callback_handler(call):
                     cur = api_dbs(c)
                     if op == "e" and 1 <= n <= len(cur):
                         cur[n - 1]["url"] = _norm_ep(url)
-                    else:
+                    elif len(cur) < MAX_DBS:
                         cur.append({"url": _norm_ep(url), "on": True})
                     save_api_dbs(c, cur, rm.from_user.id)
                     t2, mk2 = api_db_view(c, n) if op == "e" else api_detail_view(c)
